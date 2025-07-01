@@ -28,10 +28,19 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
   const [previewTemplate, setPreviewTemplate] = useState<string>('standard');
 
   const handleSaveQuotation = async () => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found - cannot save quotation');
+      alert('You must be logged in to save a quotation.');
+      return;
+    }
     setLoading(true);
     try {
-      console.log('Saving quotation with data:', quotation);
+      // Get the correct user ID from Auth0
+      const userId = user?.sub || user?.id;
+      if (!userId) {
+        throw new Error('No user ID available from Auth0');
+      }
+      console.log('Saving quotation with user ID:', userId);
       const quotationData = {
         quotation_number: quotation.quotation_number,
         customer_id: quotation.customer_id || null,
@@ -54,18 +63,24 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
         show_price_per_box: quotation.show_price_per_box || false,
         show_amount: quotation.show_amount || false,
         show_margin: quotation.show_margin || false,
-        created_by: user.id
+        created_by: userId
       };
-
+      console.log('Quotation data to save:', quotationData);
       let quotationId = quotation.id;
       let newQuotation = null;
       if (quotationId) {
         // Update existing quotation
-        const { error: updateError } = await supabase
+        console.log('Updating existing quotation with ID:', quotationId);
+        const { data, error: updateError } = await supabase
           .from('quotations')
           .update(quotationData)
-          .eq('id', quotationId);
-        if (updateError) throw updateError;
+          .eq('id', quotationId)
+          .select();
+        if (updateError) {
+          console.error('Supabase update error:', updateError);
+          throw updateError;
+        }
+        console.log('Quotation updated successfully:', data);
         // Remove all old rooms and items for this quotation
         const { data: oldRooms } = await supabase
           .from('quotation_rooms')
@@ -79,16 +94,20 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
         newQuotation = { id: quotationId };
       } else {
         // Create new quotation
+        console.log('Creating new quotation');
         const { data, error: quotationError } = await supabase
           .from('quotations')
           .insert(quotationData)
           .select()
           .single();
-        if (quotationError) throw quotationError;
+        if (quotationError) {
+          console.error('Supabase insert error:', quotationError);
+          throw quotationError;
+        }
+        console.log('Quotation created successfully:', data);
         newQuotation = data;
         quotationId = data.id;
       }
-
       // Save rooms and items
       for (const room of quotation.rooms || []) {
         const roomData = {
@@ -126,7 +145,6 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
           await supabase.from('quotation_room_items').insert(itemData);
         }
       }
-
       // Fetch the complete quotation data
       const { data: completeQuotation, error: fetchError } = await supabase
         .from('quotations')
@@ -152,9 +170,21 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
         }))
       };
       setSavedQuotation(transformedQuotation);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving quotation:', error);
-      alert('Failed to save quotation. Please try again.');
+      let errorMessage = 'Failed to save quotation. Please try again.';
+      if (error?.message) {
+        if (error.message.includes('row-level security policy')) {
+          errorMessage = 'Permission denied. Please check your login status and try again.';
+        } else if (error.message.includes('duplicate key')) {
+          errorMessage = 'A quotation with this number already exists.';
+        } else if (error.message.includes('foreign key')) {
+          errorMessage = 'Invalid reference. Please check the data and try again.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -422,16 +452,6 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             <p className="text-gray-600">Review your quotation details below and click "Create Quotation" to save.</p>
           </div>
 
-          {/* Debug Information */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h4 className="font-medium text-yellow-800 mb-2">Debug Information</h4>
-            <div className="text-sm text-yellow-700 space-y-1">
-              <p><strong>is_area_wise:</strong> {quotation.is_area_wise ? 'true' : 'false'}</p>
-              <p><strong>export_type:</strong> {quotation.export_type}</p>
-              <p><strong>rooms count:</strong> {quotation.rooms?.length || 0}</p>
-              <p><strong>total_amount:</strong> ₹{quotation.total_amount?.toFixed(2) || '0.00'}</p>
-            </div>
-          </div>
 
           {/* Quotation Preview */}
           <div className="bg-white border border-gray-200 rounded-lg p-6">

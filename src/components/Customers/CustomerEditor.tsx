@@ -28,10 +28,23 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      console.error('No user found - cannot save customer');
+      alert('You must be logged in to save a customer.');
+      return;
+    }
     
     setLoading(true);
     try {
+      // Get the correct user ID from Auth0
+      const userId = user?.sub || user?.id;
+      
+      if (!userId) {
+        throw new Error('No user ID available from Auth0');
+      }
+
+      console.log('Saving customer with user ID:', userId);
+      
       const customerData = {
         name: formData.name.trim(),
         email: formData.email.trim() || null,
@@ -39,30 +52,62 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
         gst_number: formData.gst_number.trim() || null,
         site_address: formData.site_address.trim() || null,
         notes: formData.notes.trim() || null,
-        created_by: user?.sub || user?.id,
+        created_by: userId,
       };
+
+      console.log('Customer data to save:', customerData);
 
       if (customer?.id) {
         // Update existing customer
-        const { error } = await supabase
+        console.log('Updating existing customer with ID:', customer.id);
+        const { data, error } = await supabase
           .from('customers')
           .update(customerData)
-          .eq('id', customer.id);
+          .eq('id', customer.id)
+          .select();
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase update error:', error);
+          throw error;
+        }
+        
+        console.log('Customer updated successfully:', data);
       } else {
         // Create new customer
-        const { error } = await supabase
+        console.log('Creating new customer');
+        const { data, error } = await supabase
           .from('customers')
-          .insert(customerData);
+          .insert(customerData)
+          .select();
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase insert error:', error);
+          throw error;
+        }
+        
+        console.log('Customer created successfully:', data);
       }
 
       onSave();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving customer:', error);
-      alert('Failed to save customer. Please try again.');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to save customer. Please try again.';
+      
+      if (error?.message) {
+        if (error.message.includes('row-level security policy')) {
+          errorMessage = 'Permission denied. Please check your login status and try again.';
+        } else if (error.message.includes('duplicate key')) {
+          errorMessage = 'A customer with this information already exists.';
+        } else if (error.message.includes('foreign key')) {
+          errorMessage = 'Invalid reference. Please check the data and try again.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
