@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Quotation } from '../types';
-import { supabase } from '../lib/supabase';
 import LinkModernTemplate from '../components/Quotations/templates/LinkModernTemplate';
 import LinkMobileTemplate from '../components/Quotations/templates/LinkMobileTemplate';
 import LinkPrintTemplate from '../components/Quotations/templates/LinkPrintTemplate';
@@ -24,7 +23,6 @@ const QuotationSharedView: React.FC = () => {
     setError(null);
     
     try {
-      // Search by quotation_number and use limit(1) instead of single()
       const { data: quotationData, error: quotationError } = await supabase
         .from('quotations')
         .select(`

@@ -18,7 +18,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
   const [freightValue, setFreightValue] = useState(product.freight);
   const [savingFreight, setSavingFreight] = useState(false);
 
-  const imageUrl = product.image_url || getImageUrl(product.design_name.toLowerCase().replace(/\s+/g, '-') + '.jpg');
+  const imageUrl = product.image_url || getImageUrl((product.name || '').toLowerCase().replace(/\s+/g, '-') + '.jpg');
 
   // Calculate MOP (MRP - 45%)
   const mopPerSqft = product.mrp_per_sqft * 0.55; // 55% of MRP (100% - 45%)
@@ -88,7 +88,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 <Package className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">{product.design_name}</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
                 <p className="text-gray-600">{product.size}</p>
               </div>
             </div>
@@ -115,7 +115,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 <div className="relative bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
                   <img
                     src={imageUrl}
-                    alt={product.design_name}
+                    alt={product.name}
                     className="w-full h-64 object-cover"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;

@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, Archive, Download, Upload } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { Plus, Search, Filter, Edit, Trash2, Archive, Download, Upload, Package, SortAsc, SortDesc } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import type { User } from '@supabase/supabase-js';
 import ProductEditor from './ProductEditor';
 import ExcelImporter from './ExcelImporter';
 import ProductDetailModal from './ProductDetailModal';
 import { useDebounce } from '../../hooks/useDebounce';
+import { api } from '../../lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { AlertTriangle } from 'lucide-react';
 
 interface Product {
   id: string;
-  design_name: string;
+  name: string;
   collection: string;
   size: string;
   surface: string;
@@ -21,7 +25,7 @@ interface Product {
   actual_sqft_per_box: number;
   billed_sqft_per_box: number;
   is_archived: boolean;
-  created_by: string;
+  user_id: string;
   weight: number;
   freight: number;
 }
@@ -39,109 +43,53 @@ const ProductList: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [sortBy, setSortBy] = useState('design_name');
+  const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const itemsPerPage = 20;
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const loadProducts = async () => {
     setLoading(true);
     try {
-      console.log('Loading products for user:', user?.sub);
+      const token = session?.access_token;
+      const response = await api.getProducts(token);
       
-      // Build the query with user filtering
-      let query = supabase
-        .from('products')
-        .select('*', { count: 'exact' })
-        .eq('created_by', user?.sub) // Filter by current user
-        .eq('is_archived', filterArchived)
-        .order(sortBy, { ascending: sortOrder === 'asc' })
-        .range((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage - 1);
-
-      // Add search filter if search term exists
-      if (debouncedSearchTerm.trim()) {
-        query = query.or(`design_name.ilike.%${debouncedSearchTerm}%,collection.ilike.%${debouncedSearchTerm}%,size.ilike.%${debouncedSearchTerm}%`);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load products');
       }
 
-      const { data, error, count } = await query;
-
-      if (error) throw error;
-
-      console.log('Products loaded:', data?.length || 0, 'products');
-      console.log('Sample product:', data?.[0]);
-
-      setProducts(data || []);
-      setTotalCount(count || 0);
+      setProducts(response.data || []);
+      setTotalCount((response.data || []).length);
     } catch (error) {
       console.error('Error loading products:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load products');
     } finally {
       setLoading(false);
     }
   };
 
-  const getTotalCount = async () => {
-    try {
-      const { count, error: countError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('created_by', user?.sub) // Filter by current user
-        .eq('is_archived', filterArchived);
-
-      if (countError) throw countError;
-      setTotalCount(count || 0);
-    } catch (error) {
-      console.error('Error getting total count:', error);
-    }
-  };
-
   useEffect(() => {
-    if (user?.sub) {
+    if (session?.access_token) {
       loadProducts();
     }
-  }, [currentPage, debouncedSearchTerm, filterArchived, sortBy, sortOrder, user?.sub]);
+  }, [currentPage, debouncedSearchTerm, filterArchived, sortBy, sortOrder, session?.access_token]);
 
-  useEffect(() => {
-    if (user?.sub) {
-      getTotalCount();
-    }
-  }, [debouncedSearchTerm, filterArchived, user?.sub]);
-
-  const handleDelete = async (productId: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-
+  const handleDelete = async () => {
+    if (!productToDelete) return;
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
-        // .eq('created_by', user?.sub) // Temporarily commented out for debugging
-
-      if (error) throw error;
-
-      setProducts(products.filter(p => p.id !== productId));
-      getTotalCount();
+      const response = await api.deleteProduct(productToDelete.id, session?.access_token);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete product');
+      }
+      setProducts(products.filter(p => p.id !== productToDelete.id));
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert('Failed to delete product');
-    }
-  };
-
-  const handleArchive = async (productId: string, archive: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('products')
-        .update({ is_archived: archive })
-        .eq('id', productId)
-        // .eq('created_by', user?.sub) // Temporarily commented out for debugging
-
-      if (error) throw error;
-
-      setProducts(products.map(p => 
-        p.id === productId ? { ...p, is_archived: archive } : p
-      ));
-    } catch (error) {
-      console.error('Error archiving product:', error);
-      alert('Failed to archive product');
+      alert(error instanceof Error ? error.message : 'Failed to delete product');
     }
   };
 
@@ -155,6 +103,37 @@ const ProductList: React.FC = () => {
   };
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const handleSave = (savedProduct?: Product) => {
+    if (savedProduct) {
+      setProducts(prev => {
+        const existing = prev.find(p => p.id === savedProduct.id);
+        if (existing) {
+          return prev.map(p => p.id === savedProduct.id ? savedProduct : p);
+        } else {
+          return [savedProduct, ...prev];
+        }
+      });
+    }
+    setShowEditor(false);
+  };
+
+  // Add frontend sorting for products
+  const sortedProducts = [...products].sort((a, b) => {
+    const aValue = a[sortBy] || '';
+    const bValue = b[sortBy] || '';
+    if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Get discount mapping from localStorage
+  const discountMap: Record<string, number> = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
+  // Helper to calculate discounted price
+  const getDiscountedPrice = (product: Product) => {
+    const discount = discountMap[product.size] || 0;
+    return product.mrp_per_sqft - (product.mrp_per_sqft * discount / 100);
+  };
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -215,29 +194,25 @@ const ProductList: React.FC = () => {
             
             {/* Mobile Cards View */}
             <div className="lg:hidden">
-              {products.map((product) => (
-                <div key={product.id} className="border-b border-gray-200 p-4">
+              {sortedProducts.map((product) => (
+                <div
+                  key={product.id}
+                  className="border-b border-gray-200 p-4 cursor-pointer hover:bg-gray-50"
+                  onClick={() => {
+                    setSelectedProduct(product);
+                    setShowDetailModal(true);
+                  }}
+                >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <h3 className="font-medium text-gray-900 text-sm">{product.design_name}</h3>
+                      <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
                       <p className="text-gray-500 text-xs">{product.collection}</p>
                       <p className="text-gray-500 text-xs">Size: {product.size}</p>
                     </div>
                     <div className="flex items-center space-x-1">
                       <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setShowDetailModal(true);
-                        }}
-                        className="p-1 text-blue-600 hover:text-blue-900"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setEditingProduct(product);
                           setShowEditor(true);
                         }}
@@ -246,13 +221,11 @@ const ProductList: React.FC = () => {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleArchive(product.id, !product.is_archived)}
-                        className="p-1 text-yellow-600 hover:text-yellow-900"
-                      >
-                        <Archive className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProductToDelete(product);
+                          setDeleteDialogOpen(true);
+                        }}
                         className="p-1 text-red-600 hover:text-red-900"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -263,10 +236,6 @@ const ProductList: React.FC = () => {
                     <div>
                       <span className="text-gray-500">Surface:</span>
                       <span className="ml-1 font-medium">{product.surface}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Rate/SQFT:</span>
-                      <span className="ml-1 font-medium">₹{product.mrp_per_sqft}</span>
                     </div>
                   </div>
                 </div>
@@ -280,10 +249,10 @@ const ProductList: React.FC = () => {
                   <tr>
                     <th 
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                      onClick={() => handleSort('design_name')}
+                      onClick={() => handleSort('name')}
                     >
                       Design Name
-                      {sortBy === 'design_name' && (
+                      {sortBy === 'name' && (
                         <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </th>
@@ -308,16 +277,14 @@ const ProductList: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Surface
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rate/SQFT
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discounted Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {products.map((product) => (
+                  {sortedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className="hover:bg-gray-50 cursor-pointer"
@@ -328,7 +295,7 @@ const ProductList: React.FC = () => {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {product.design_name}
+                          {product.name}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -341,7 +308,7 @@ const ProductList: React.FC = () => {
                         <div className="text-sm text-gray-900">{product.surface}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">₹{product.mrp_per_sqft}</div>
+                        <div className="text-sm text-gray-900">₹{getDiscountedPrice(product).toFixed(2)}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
@@ -358,16 +325,7 @@ const ProductList: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleArchive(product.id, !product.is_archived);
-                            }}
-                            className="text-yellow-600 hover:text-yellow-900"
-                          >
-                            <Archive className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(product.id);
+                              { setProductToDelete(product); setDeleteDialogOpen(true); }
                             }}
                             className="text-red-600 hover:text-red-900"
                           >
@@ -514,11 +472,7 @@ const ProductList: React.FC = () => {
             setShowEditor(false);
             setEditingProduct(null);
           }}
-          onSave={() => {
-            setShowEditor(false);
-            setEditingProduct(null);
-            loadProducts();
-          }}
+          onSave={handleSave}
         />
       )}
 
@@ -541,6 +495,24 @@ const ProductList: React.FC = () => {
           }}
         />
       )}
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="bg-red-50 border-red-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+              Delete Product
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-red-700 font-medium mt-2 mb-4">
+            Are you sure you want to delete this product? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="border-gray-300">Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white shadow">Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

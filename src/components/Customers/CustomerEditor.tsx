@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
-import { Save, User, Mail, Phone, FileText, MapPin, Hash } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Save, User as UserIcon, Mail, Phone, Building, MapPin, FileText, AlertCircle, Hash } from 'lucide-react';
 import { QuotationCustomer } from '../../types';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
+import { api } from '../../lib/api';
+import type { User } from '@supabase/supabase-js';
 
 interface CustomerEditorProps {
   customer?: QuotationCustomer;
-  onSave: () => void;
+  onSave: (customer?: QuotationCustomer) => void;
   onCancel: () => void;
 }
 
 const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCancel }) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: customer?.name || '',
@@ -28,9 +30,24 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
   };
 
   const handleSave = async () => {
-    if (!user) return;
-    
+    if (!isFormValid) {
+      console.log('Form validation failed');
+      return;
+    }
+
+    if (!user) {
+      console.error('No user found - cannot save customer');
+      alert('You must be logged in to save a customer.');
+      return;
+    }
+    if (!session?.access_token) {
+      console.error('No access token found - cannot save customer');
+      alert('No access token found. Please log in again.');
+      return;
+    }
     setLoading(true);
+    setError(null);
+
     try {
       const customerData = {
         name: formData.name.trim(),
@@ -39,30 +56,22 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
         gst_number: formData.gst_number.trim() || null,
         site_address: formData.site_address.trim() || null,
         notes: formData.notes.trim() || null,
-        created_by: user?.sub || user?.id,
+        created_by: user.id,
       };
 
-      if (customer?.id) {
-        // Update existing customer
-        const { error } = await supabase
-          .from('customers')
-          .update(customerData)
-          .eq('id', customer.id);
+      console.log('Saving customer with data:', customerData);
+
+      const response = await api.saveCustomer(customerData, customer?.id, session.access_token);
         
-        if (error) throw error;
-      } else {
-        // Create new customer
-        const { error } = await supabase
-          .from('customers')
-          .insert(customerData);
-        
-        if (error) throw error;
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to save customer');
       }
 
-      onSave();
+      console.log('Customer saved successfully:', response.data);
+      onSave(response.data);
     } catch (error) {
       console.error('Error saving customer:', error);
-      alert('Failed to save customer. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to save customer. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -91,7 +100,7 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
                 Customer Name *
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.name}
@@ -108,7 +117,7 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="email"
                   value={formData.email}
@@ -126,7 +135,7 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
                 Phone Number
               </label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="tel"
                   value={formData.phone}
@@ -170,7 +179,7 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
               Site Address
             </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+              <UserIcon className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
               <textarea
                 value={formData.site_address}
                 onChange={(e) => handleInputChange('site_address', e.target.value)}
@@ -193,7 +202,7 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
               Notes
             </label>
             <div className="relative">
-              <FileText className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+              <UserIcon className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
               <textarea
                 value={formData.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}

@@ -129,7 +129,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
       const { data, error } = await supabaseAdmin
         .from('products')
         .select('size')
-        .eq('design_name', productName)
+        .eq('name', productName)
         .eq('is_archived', false)
         .order('size');
 
@@ -163,7 +163,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
       const { data, error } = await supabaseAdmin
         .from('products')
         .select('surface')
-        .eq('design_name', productName)
+        .eq('name', productName)
         .eq('size', size)
         .eq('is_archived', false)
         .order('surface');
@@ -205,7 +205,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
       let query = supabaseAdmin
         .from('products')
         .select('*')
-        .eq('design_name', productName)
+        .eq('name', productName)
         .eq('size', size)
         .eq('is_archived', false);
 
@@ -477,7 +477,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium text-gray-900">
-                        {product.design_name}
+                        {product.name}
                       </div>
                       <div className="text-sm text-gray-600">
                         {product.size} • {product.collection || 'No Collection'} • {product.surface || 'Standard'}

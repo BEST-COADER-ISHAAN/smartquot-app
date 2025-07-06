@@ -189,12 +189,12 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
                                 {quotation.include_images && item.product?.image_url && (
                                   <img
                                     src={item.product.image_url}
-                                    alt={item.product.design_name}
+                                    alt={item.product.name}
                                     className="w-8 h-8 object-cover rounded border border-gray-200 print:hidden"
                                   />
                                 )}
                                 <div>
-                                  <div className="font-medium">{item.product?.design_name || 'Unknown Product'}</div>
+                                  <div className="font-medium">{item.product?.name || 'Unknown Product'}</div>
                                   {item.product?.collection && (
                                     <div className="text-xs text-blue-600">{item.product.collection}</div>
                                   )}
@@ -295,11 +295,11 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
                   <div key={item.id || idx} className="flex flex-col items-center border rounded-2xl p-4 bg-white/80 shadow-md border-white/60">
                     <img
                       src={item.product?.image_url}
-                      alt={item.product?.design_name}
+                      alt={item.product?.name}
                       className="h-24 w-24 object-contain rounded shadow mb-2 bg-gray-50"
                       style={{ maxWidth: 96, maxHeight: 96 }}
                     />
-                    <div className="text-xs font-medium text-center truncate w-full" title={item.product?.design_name}>{item.product?.design_name}</div>
+                    <div className="text-xs font-medium text-center truncate w-full" title={item.product?.name}>{item.product?.name}</div>
                     <div className="text-xs text-muted-foreground text-center">{item.product?.size}</div>
                   </div>
                 ))}

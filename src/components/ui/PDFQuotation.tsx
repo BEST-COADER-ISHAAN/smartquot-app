@@ -196,12 +196,12 @@ function PDFQuotation({ quotation, companyProfile }: PDFQuotationProps) {
                                 {quotation.include_images && item.product?.image_url && (
                                   <img
                                     src={item.product.image_url}
-                                    alt={item.product.design_name}
+                                    alt={item.product.name}
                                     className="w-12 h-12 object-cover rounded border border-gray-200"
                                   />
                                 )}
                                 <div>
-                                  <div className="font-medium">{item.product?.design_name || 'Unknown Product'}</div>
+                                  <div className="font-medium">{item.product?.name || 'Unknown Product'}</div>
                                   {item.product?.collection && (
                                     <div className="text-sm text-blue-600">{item.product.collection}</div>
                                   )}

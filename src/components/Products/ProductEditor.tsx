@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Package, DollarSign, Layers, Ruler, Image, Weight, Truck, Percent, Box } from 'lucide-react';
 import { QuotationProduct } from '../../types';
-import { supabase } from '../../lib/supabase';
-import { supabaseAdmin } from '../../lib/supabaseAdmin';
 import { useAuth } from '../../hooks/useAuth';
+import { api } from '../../lib/api';
 import { getImageUrl, getFilenameFromUrl } from '../../lib/storage';
 
 interface ProductEditorProps {
   product?: QuotationProduct;
-  onSave: () => void;
+  onSave: (product?: QuotationProduct) => void;
   onCancel: () => void;
 }
 
 const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel }) => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
-    design_name: product?.design_name || '',
+    name: product?.name || '',
     size: product?.size || '',
     collection: product?.collection || '',
     surface: product?.surface || '',
@@ -42,10 +42,21 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
   };
 
   const handleSave = async () => {
-    if (!user) return;
-    
+    if (!user) {
+      alert('You must be logged in to save a product.');
+      return;
+    }
+    if (!formData.name.trim()) {
+      setError('Product name (Design Name) is required.');
+      return;
+    }
     setLoading(true);
+    setError(null);
+
     try {
+      const token = session?.access_token;
+      console.log("Auth0 token:", token); // Debug log
+      
       // Construct image URL if filename is provided
       let imageUrlToSave: string | null = null;
       if (formData.image_filename && formData.image_filename.trim()) {
@@ -53,7 +64,7 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
       }
 
       const productData = {
-        design_name: formData.design_name,
+        name: formData.name,
         size: formData.size,
         collection: formData.collection || null,
         surface: formData.surface || null,
@@ -67,29 +78,19 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
         weight: formData.weight,
         freight: formData.freight,
         image_url: imageUrlToSave,
-        created_by: user?.sub || user?.id
+        created_by: user.id,
       };
 
-      if (product?.id) {
-        // Update existing product
-        const { error } = await supabaseAdmin
-          .from('products')
-          .update(productData)
-          .eq('id', product.id);
+      const response = await api.saveProduct(productData, product?.id, token);
         
-        if (error) throw error;
-      } else {
-        // Create new product
-        const { error } = await supabaseAdmin
-          .from('products')
-          .insert(productData);
-        
-        if (error) throw error;
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to save product');
       }
 
-      onSave();
+      onSave(response.data);
     } catch (error) {
       console.error('Error saving product:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save product');
     } finally {
       setLoading(false);
     }
@@ -114,8 +115,8 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
               <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                value={formData.design_name}
-                onChange={(e) => handleInputChange('design_name', e.target.value)}
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter design name"
                 required
@@ -391,6 +392,11 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
         </div>
 
         {/* Action Buttons */}
+        {error && (
+          <div className="mb-4 text-red-600 bg-red-100 border border-red-300 rounded p-2">
+            {error}
+          </div>
+        )}
         <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
           <button
             onClick={onCancel}
@@ -400,7 +406,7 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
           </button>
           <button
             onClick={handleSave}
-            disabled={loading || !formData.design_name || !formData.size}
+            disabled={loading || !formData.name || !formData.size}
             className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (

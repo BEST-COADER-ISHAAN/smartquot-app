@@ -6,6 +6,15 @@ interface PdfModernTemplateProps {
 }
 
 const PdfModernTemplate: React.FC<PdfModernTemplateProps> = ({ quotation }) => {
+  // Fetch company profile from localStorage
+  const companyProfile = {
+    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'Your Company Name' : 'Your Company Name',
+    companyAddress: typeof window !== 'undefined' ? localStorage.getItem('company_address') || 'Your Company Address' : 'Your Company Address',
+    companyPhone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-0000000000' : '+91-0000000000',
+    companyEmail: typeof window !== 'undefined' ? localStorage.getItem('company_email') || 'info@yourcompany.com' : 'info@yourcompany.com',
+    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '' : '',
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -36,11 +45,12 @@ const PdfModernTemplate: React.FC<PdfModernTemplateProps> = ({ quotation }) => {
             {/* From (Company) */}
             <div className="flex-1 rounded-xl p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 shadow">
               <div className="font-bold text-indigo-700 mb-1">From:</div>
-              <div className="font-semibold text-gray-900">Your Company Name</div>
-              <div className="text-sm text-gray-600 whitespace-pre-line">Your Company Address</div>
+              <div className="font-semibold text-gray-900">{companyProfile.companyName}</div>
+              <div className="text-sm text-gray-600 whitespace-pre-line">{companyProfile.companyAddress}</div>
               <div className="flex flex-col gap-1 mt-2 text-xs text-gray-500">
-                <span>📞 +91-0000000000</span>
-                <span>✉️ info@yourcompany.com</span>
+                {companyProfile.companyPhone && <span>📞 {companyProfile.companyPhone}</span>}
+                {companyProfile.companyEmail && <span>✉️ {companyProfile.companyEmail}</span>}
+                {companyProfile.gstNo && <span>GST: {companyProfile.gstNo}</span>}
               </div>
             </div>
             {/* To (Customer) */}
@@ -126,12 +136,12 @@ const PdfModernTemplate: React.FC<PdfModernTemplateProps> = ({ quotation }) => {
                                 {quotation.include_images && item.product?.image_url && (
                                   <img
                                     src={item.product.image_url}
-                                    alt={item.product.design_name}
+                                    alt={item.product.name}
                                     className="w-10 h-10 object-cover rounded border border-gray-200"
                                   />
                                 )}
                                 <div>
-                                  <div className="font-medium">{item.product?.design_name || 'Unknown Product'}</div>
+                                  <div className="font-medium">{item.product?.name || 'Unknown Product'}</div>
                                   {item.product?.collection && (
                                     <div className="text-xs text-indigo-600">{item.product.collection}</div>
                                   )}

@@ -11,15 +11,17 @@ import {
 } from 'lucide-react';
 import FreightEditorModal from '../components/Settings/FreightEditorModal';
 import ThemeSelector from '../components/Settings/ThemeSelector';
+import { useTheme } from '../hooks/useTheme';
 
 const Settings: React.FC = () => {
   // State for different settings
   const [preferredSizeUnit, setPreferredSizeUnit] = useState<'inches' | 'mm'>('inches');
   const [showFreightEditor, setShowFreightEditor] = useState(false);
   const [termsAndConditions, setTermsAndConditions] = useState('');
-  const [selectedTheme, setSelectedTheme] = useState('blue');
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const { theme, setThemeById } = useTheme();
 
   // Load settings from localStorage on component mount
   useEffect(() => {
@@ -29,9 +31,6 @@ const Settings: React.FC = () => {
 
       const savedTerms = localStorage.getItem('terms_and_conditions');
       if (savedTerms) setTermsAndConditions(savedTerms);
-
-      const savedTheme = localStorage.getItem('selected_theme');
-      if (savedTheme) setSelectedTheme(savedTheme);
     };
 
     loadSettings();
@@ -43,7 +42,6 @@ const Settings: React.FC = () => {
     try {
       localStorage.setItem('preferred_size_unit', preferredSizeUnit);
       localStorage.setItem('terms_and_conditions', termsAndConditions);
-      localStorage.setItem('selected_theme', selectedTheme);
 
       setSavedMessage('Settings saved successfully!');
       setTimeout(() => setSavedMessage(null), 3000);
@@ -54,13 +52,6 @@ const Settings: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleThemeChange = (themeId: string) => {
-    setSelectedTheme(themeId);
-    // Apply theme immediately
-    localStorage.setItem('selected_theme', themeId);
-    // You can add CSS variable updates here for real-time theme switching
   };
 
   const handleFreightSave = () => {
@@ -141,6 +132,8 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
+
+
         {/* Freight Settings */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
           <div className="flex items-center space-x-3 mb-4 lg:mb-6">
@@ -200,8 +193,8 @@ const Settings: React.FC = () => {
         {/* Theme Selection */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6 lg:col-span-2">
           <ThemeSelector 
-            selectedTheme={selectedTheme} 
-            onThemeChange={handleThemeChange} 
+            selectedTheme={theme.id} 
+            onThemeChange={setThemeById} 
           />
         </div>
       </div>

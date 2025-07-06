@@ -16,7 +16,7 @@ export interface Theme {
   };
 }
 
-const themes: Theme[] = [
+export const themes: Theme[] = [
   {
     id: 'blue',
     name: 'Ocean Blue',

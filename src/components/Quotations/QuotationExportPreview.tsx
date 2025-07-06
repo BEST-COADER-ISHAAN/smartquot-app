@@ -10,13 +10,7 @@ import LinkMobileTemplate from './templates/LinkMobileTemplate';
 import LinkPrintTemplate from './templates/LinkPrintTemplate';
 import OnlineQuotationComponent from '@/components/ui/OnlineQuotationComponent';
 import { exportComponentAsPDF } from '@/lib/exportPdf';
-
-// Import html2pdf
-declare global {
-  interface Window {
-    html2pdf: any;
-  }
-}
+import ReactDOMServer from 'react-dom/server';
 
 interface QuotationExportPreviewProps {
   quotation: Quotation;
@@ -39,32 +33,150 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
   // Use quotation_number instead of ID for the URL
   const shareUrl = `${window.location.origin}/quotations/shared/${quotation.quotation_number}`;
 
-  const loadHtml2Pdf = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      if (window.html2pdf) {
-        resolve(window.html2pdf);
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = () => {
-        if (window.html2pdf) {
-          resolve(window.html2pdf);
-        } else {
-          reject(new Error('html2pdf failed to load'));
-        }
-      };
-      script.onerror = () => reject(new Error('Failed to load html2pdf script'));
-      document.head.appendChild(script);
-    });
-  };
-
   const handleDownload = async () => {
-    if (!pdfContentRef.current) return;
     setIsGeneratingPDF(true);
     try {
-      await exportComponentAsPDF(pdfContentRef.current, `${quotation.quotation_number}-quotation.pdf`);
+      if (exportType === 'pdf') {
+        // Render the selected template to HTML string
+        let html = '';
+        if (template === 'standard') {
+          html = ReactDOMServer.renderToStaticMarkup(
+            <PdfStandardTemplate quotation={quotation} />
+          );
+        } else if (template === 'modern') {
+          html = ReactDOMServer.renderToStaticMarkup(
+            <PdfModernTemplate quotation={quotation} />
+          );
+        } else if (template === 'minimal') {
+          html = ReactDOMServer.renderToStaticMarkup(
+            <PdfMinimalTemplate quotation={quotation} />
+          );
+        } else if (template === 'detailed') {
+          html = ReactDOMServer.renderToStaticMarkup(
+            <PdfDetailedTemplate quotation={quotation} />
+          );
+        } else {
+          html = ReactDOMServer.renderToStaticMarkup(
+            <PdfStandardTemplate quotation={quotation} />
+          );
+        }
+        // Wrap in a full HTML document with Tailwind CDN
+        const fullHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>Quotation PDF</title>
+  <link href='https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css' rel='stylesheet'>
+  <style>
+    /* Fallback styles in case Tailwind doesn't load */
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .section { margin-bottom: 20px; }
+    .table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    .table th { background-color: #f8f9fa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    ${html}
+  </div>
+</body>
+</html>`;
+
+        console.log('HTML being sent to Netlify function:');
+        console.log('HTML length:', fullHtml.length);
+        console.log('HTML preview:', fullHtml.substring(0, 500));
+        
+        // Call Netlify function
+        const response = await fetch('/.netlify/functions/generate-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: fullHtml })
+        });
+        if (!response.ok) throw new Error('Failed to generate PDF');
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        console.log('All response headers:', Object.fromEntries(response.headers.entries()));
+        
+        // Check if response is actually base64 or binary
+        const responseText = await response.text();
+        console.log('Response text length:', responseText.length);
+        console.log('Response preview:', responseText.substring(0, 100));
+        
+        let pdfData;
+        
+        // Check if it looks like base64
+        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+        const cleanText = responseText.replace(/\s/g, '');
+        const isBase64 = base64Regex.test(cleanText);
+        
+        console.log('Is base64 format:', isBase64);
+        
+        if (isBase64) {
+            // Decode base64 to binary
+            const binaryString = atob(cleanText);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            pdfData = bytes.buffer;
+            console.log('Decoded PDF size:', pdfData.byteLength);
+        } else {
+            // It's binary data, convert text back to binary
+            const bytes = new Uint8Array(responseText.length);
+            for (let i = 0; i < responseText.length; i++) {
+                bytes[i] = responseText.charCodeAt(i);
+            }
+            pdfData = bytes.buffer;
+            console.log('Binary PDF size:', pdfData.byteLength);
+        }
+        
+        // Debug: Check what we're actually getting
+        const pdfHeader = new Uint8Array(pdfData.slice(0, 8));
+        const pdfHeaderText = String.fromCharCode.apply(null, Array.from(pdfHeader));
+        console.log('PDF header:', pdfHeaderText);
+        console.log('PDF header bytes:', Array.from(pdfHeader));
+        console.log('First 20 bytes:', Array.from(new Uint8Array(pdfData.slice(0, 20))));
+        
+        // Temporarily allow any header for debugging
+        console.log('Is valid PDF header:', pdfHeaderText.startsWith('%PDF'));
+        
+        // Create blob from PDF data
+        const blob = new Blob([pdfData], { type: 'application/pdf' });
+        console.log('Blob size:', blob.size);
+        console.log('Blob type:', blob.type);
+        
+        // Ensure blob is fully ready before creating URL
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Create blob URL only after ensuring blob is ready
+        const url = window.URL.createObjectURL(blob);
+        
+        // Use a more reliable download method
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${quotation.quotation_number}-quotation.pdf`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        
+        // Trigger download
+        a.click();
+        
+        // Remove the element immediately
+        document.body.removeChild(a);
+        
+        // Clean up the blob URL after a longer delay to ensure download completes
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 5000);
+      } else {
+        if (!pdfContentRef.current) return;
+        await exportComponentAsPDF(pdfContentRef.current, `${quotation.quotation_number}-quotation.pdf`);
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');

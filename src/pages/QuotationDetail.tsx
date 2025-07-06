@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader } from 'lucide-react';
 import { Quotation } from '../types';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import QuotationWizard from '../components/Quotations/QuotationWizard';
 
 const QuotationDetail: React.FC = () => {
@@ -11,6 +11,7 @@ const QuotationDetail: React.FC = () => {
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { auth0AccessToken } = useAuth();
 
   useEffect(() => {
     if (id) {
@@ -23,6 +24,7 @@ const QuotationDetail: React.FC = () => {
     setError(null);
     
     try {
+      const supabase = createSupabaseClientWithToken(auth0AccessToken);
       const { data: quotationData, error: quotationError } = await supabase
         .from('quotations')
         .select(`

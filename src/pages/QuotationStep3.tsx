@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader } from 'lucide-react';
 import { Quotation } from '../types';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import QuotationStep3 from '../components/Quotations/QuotationStep3';
+import { supabase } from '../lib/supabase';
 
 const QuotationStep3Page: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +12,7 @@ const QuotationStep3Page: React.FC = () => {
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { session } = useAuth();
 
   useEffect(() => {
     if (id) {
@@ -22,6 +24,7 @@ const QuotationStep3Page: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const quotedId = quotationId.startsWith('#') ? quotationId : `#${quotationId}`;
       const { data: quotationData, error: quotationError } = await supabase
         .from('quotations')
         .select(`
@@ -34,7 +37,7 @@ const QuotationStep3Page: React.FC = () => {
             )
           )
         `)
-        .eq('id', quotationId)
+        .or(`id.eq.${quotationId},quotation_number.eq.${quotedId}`)
         .single();
 
       if (quotationError) throw quotationError;
@@ -56,10 +59,13 @@ const QuotationStep3Page: React.FC = () => {
       const transformedQuotation: Quotation = {
         ...quotationData,
         customer: customerData,
-        rooms: quotationData.quotation_rooms.map((room: any) => ({
+        rooms: (quotationData.quotation_rooms || []).map((room: any) => ({
           ...room,
-          items: room.quotation_room_items
-        }))
+          items: (room.quotation_room_items || []).map((item: any) => ({
+            ...item,
+            name: item.name || item.product_name,
+          })),
+        })),
       };
       setQuotation(transformedQuotation);
     } catch (error) {

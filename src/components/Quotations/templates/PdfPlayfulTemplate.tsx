@@ -14,6 +14,15 @@ const accentColors = [
 ];
 
 const PdfPlayfulTemplate: React.FC<PdfPlayfulTemplateProps> = ({ quotation }) => {
+  // Fetch company profile from localStorage
+  const companyProfile = {
+    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'Your Company Name' : 'Your Company Name',
+    companyAddress: typeof window !== 'undefined' ? localStorage.getItem('company_address') || 'Your Company Address' : 'Your Company Address',
+    companyPhone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-0000000000' : '+91-0000000000',
+    companyEmail: typeof window !== 'undefined' ? localStorage.getItem('company_email') || 'info@yourcompany.com' : 'info@yourcompany.com',
+    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '' : '',
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -46,9 +55,13 @@ const PdfPlayfulTemplate: React.FC<PdfPlayfulTemplateProps> = ({ quotation }) =>
           <div className="flex flex-col md:flex-row justify-between gap-6 mb-6">
             <div className="flex-1 border-2 border-teal-200 rounded-2xl p-4 bg-teal-50">
               <div className="font-bold text-teal-700 mb-1">From:</div>
-              <div className="text-pink-700">Your Company Name</div>
-              <div className="text-xs text-teal-500">Your Company Address</div>
-              <div className="text-xs text-pink-400 mt-1">+91-0000000000 | info@yourcompany.com</div>
+              <div className="text-pink-700">{companyProfile.companyName}</div>
+              <div className="text-xs text-teal-500">{companyProfile.companyAddress}</div>
+              <div className="text-xs text-pink-400 mt-1">
+                {companyProfile.companyPhone && <span>{companyProfile.companyPhone}</span>}
+                {companyProfile.companyEmail && <span> | {companyProfile.companyEmail}</span>}
+                {companyProfile.gstNo && <span> | GST: {companyProfile.gstNo}</span>}
+              </div>
             </div>
             <div className="flex-1 border-2 border-pink-200 rounded-2xl p-4 bg-pink-50">
               <div className="font-bold text-pink-700 mb-1">To:</div>
@@ -128,7 +141,7 @@ const PdfPlayfulTemplate: React.FC<PdfPlayfulTemplateProps> = ({ quotation }) =>
                         {room.items.map((item, itemIndex) => (
                           <tr key={`${roomIndex}-${itemIndex}`} className={itemIndex % 2 === 0 ? "bg-white" : "bg-yellow-50"}>
                             <td className="px-2 py-2 align-middle" style={{ fontSize: '12px' }}>
-                              <div className="font-bold text-pink-600">{item.product?.design_name || 'Unknown Product'}</div>
+                              <div className="font-bold text-pink-600">{item.product?.name || 'Unknown Product'}</div>
                               {item.product?.collection && (
                                 <div className="text-xs text-teal-500">{item.product.collection}</div>
                               )}

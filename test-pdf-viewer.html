@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Viewer Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        .result { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        #pdfViewer { width: 100%; height: 600px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>PDF Viewer Test</h1>
+    <button onclick="testPDFViewer()">Generate and View PDF</button>
+    <div id="result" class="result"></div>
+    <iframe id="pdfViewer" style="display: none;"></iframe>
+
+    <script>
+        async function testPDFViewer() {
+            const resultDiv = document.getElementById('result');
+            const pdfViewer = document.getElementById('pdfViewer');
+            resultDiv.innerHTML = 'Generating PDF...';
+            
+            try {
+                // Simple HTML for testing
+                const simpleHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Simple Test</title>
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                padding: 20px; 
+                                margin: 0;
+                                background-color: white;
+                            }
+                            h1 { 
+                                color: blue; 
+                                font-size: 24px;
+                                margin-bottom: 20px;
+                            }
+                            p { 
+                                font-size: 16px;
+                                margin-bottom: 10px;
+                                color: black;
+                            }
+                            .test-content {
+                                border: 2px solid red;
+                                padding: 20px;
+                                margin: 20px 0;
+                                background-color: #f0f0f0;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Simple PDF Test</h1>
+                        <div class="test-content">
+                            <p><strong>This is a simple test PDF.</strong></p>
+                            <p>If you can see this, PDF generation is working!</p>
+                            <p>Current time: ${new Date().toLocaleString()}</p>
+                            <p>Test content with red border and gray background.</p>
+                        </div>
+                        <p>This text should be visible in the PDF.</p>
+                        <p>Another paragraph for testing.</p>
+                    </body>
+                    </html>
+                `;
+                
+                const response = await fetch('/.netlify/functions/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html: simpleHtml })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                // Get response as text and decode
+                const responseText = await response.text();
+                let pdfData;
+                
+                // Check if it looks like base64
+                const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+                const cleanText = responseText.replace(/\s/g, '');
+                const isBase64 = base64Regex.test(cleanText);
+                
+                if (isBase64) {
+                    // Decode base64 to binary
+                    const binaryString = atob(cleanText);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                } else {
+                    // It's binary data, convert text back to binary
+                    const bytes = new Uint8Array(responseText.length);
+                    for (let i = 0; i < responseText.length; i++) {
+                        bytes[i] = responseText.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                }
+                
+                // Create blob and display in iframe
+                const blob = new Blob([pdfData], { type: 'application/pdf' });
+                const url = window.URL.createObjectURL(blob);
+                
+                // Show PDF in iframe
+                pdfViewer.style.display = 'block';
+                pdfViewer.src = url;
+                
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p>PDF generated successfully.</p>
+                    <p>Size: ${pdfData.byteLength} bytes</p>
+                    <p>PDF should be visible in the viewer below.</p>
+                    <p>If the PDF appears blank, try downloading it to see if it opens in your PDF viewer.</p>
+                `;
+                
+                // Also trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'test-pdf-viewer.pdf';
+                a.click();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `
+                    <h3>Error</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 

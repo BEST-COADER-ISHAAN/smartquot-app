@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Users, Mail, Phone, MapPin } from 'lucide-react';
-import { QuotationCustomer } from '../../types';
-import { supabase } from '../../lib/supabase';
+import { Plus, Search, Edit, Trash2, Mail, Phone, MapPin, Hash, Users, Filter, SortAsc, SortDesc } from 'lucide-react';
 import CustomerEditor from './CustomerEditor';
+import { QuotationCustomer } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
+import { api } from '../../lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { AlertTriangle } from 'lucide-react';
 
 const CustomerList: React.FC = () => {
   const [customers, setCustomers] = useState<QuotationCustomer[]>([]);
@@ -10,23 +14,31 @@ const CustomerList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showEditor, setShowEditor] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<QuotationCustomer | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const { session } = useAuth();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<QuotationCustomer | null>(null);
 
   useEffect(() => {
-    loadCustomers();
-  }, []);
+    if (session?.access_token) {
+      loadCustomers();
+    }
+  }, [session?.access_token]);
 
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name');
+      const token = session?.access_token;
+      const response = await api.getCustomers(token);
 
-      if (error) throw error;
-      setCustomers(data || []);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load customers');
+      }
+
+      setCustomers(response.data || []);
     } catch (error) {
       console.error('Error loading customers:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load customers');
     } finally {
       setLoading(false);
     }
@@ -52,10 +64,18 @@ const CustomerList: React.FC = () => {
     setShowEditor(true);
   };
 
-  const handleSave = () => {
+  const handleSave = (savedCustomer?: QuotationCustomer) => {
+    if (savedCustomer) {
+      setCustomers(prev => {
+        const existing = prev.find(c => c.id === savedCustomer.id);
+        if (existing) {
+          return prev.map(c => c.id === savedCustomer.id ? savedCustomer : c);
+        } else {
+          return [savedCustomer, ...prev];
+        }
+      });
+    }
     setShowEditor(false);
-    setEditingCustomer(undefined);
-    loadCustomers();
   };
 
   const handleCancel = () => {
@@ -63,20 +83,20 @@ const CustomerList: React.FC = () => {
     setEditingCustomer(undefined);
   };
 
-  const handleDelete = async (customer: QuotationCustomer) => {
-    if (confirm(`Are you sure you want to delete "${customer.name}"? This action cannot be undone.`)) {
-      try {
-        const { error } = await supabase
-          .from('customers')
-          .delete()
-          .eq('id', customer.id);
-
-        if (error) throw error;
-        loadCustomers();
-      } catch (error) {
-        console.error('Error deleting customer:', error);
-        alert('Failed to delete customer. They may be referenced in existing quotations.');
+  const handleDelete = async () => {
+    if (!customerToDelete) return;
+    try {
+      const token = session?.access_token;
+      const response = await api.deleteCustomer(customerToDelete.id, token);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete customer');
       }
+      setCustomers(customers.filter(c => c.id !== customerToDelete.id));
+      setDeleteDialogOpen(false);
+      setCustomerToDelete(null);
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete customer');
     }
   };
 
@@ -218,7 +238,7 @@ const CustomerList: React.FC = () => {
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(customer)}
+                        onClick={() => { setCustomerToDelete(customer); setDeleteDialogOpen(true); }}
                         className="p-1 text-red-600 hover:text-red-800"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -352,7 +372,7 @@ const CustomerList: React.FC = () => {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(customer)}
+                            onClick={() => { setCustomerToDelete(customer); setDeleteDialogOpen(true); }}
                             className="text-red-600 hover:text-red-800 transition-colors duration-150"
                             title="Delete"
                           >
@@ -368,6 +388,24 @@ const CustomerList: React.FC = () => {
           </>
         )}
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="bg-red-50 border-red-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+              Delete Customer
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-red-700 font-medium mt-2 mb-4">
+            Are you sure you want to delete this customer? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="border-gray-300">Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white shadow">Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

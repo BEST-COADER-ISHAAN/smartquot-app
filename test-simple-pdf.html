@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple PDF Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        .result { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Simple PDF Test</h1>
+    <button onclick="testSimplePDF()">Generate Simple PDF</button>
+    <div id="result" class="result"></div>
+
+    <script>
+        async function testSimplePDF() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Generating simple PDF...';
+            
+            try {
+                // Simple HTML for testing
+                const simpleHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Simple Test</title>
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                padding: 20px; 
+                                margin: 0;
+                                background-color: white;
+                            }
+                            h1 { 
+                                color: blue; 
+                                font-size: 24px;
+                                margin-bottom: 20px;
+                            }
+                            p { 
+                                font-size: 16px;
+                                margin-bottom: 10px;
+                                color: black;
+                            }
+                            .test-content {
+                                border: 2px solid red;
+                                padding: 20px;
+                                margin: 20px 0;
+                                background-color: #f0f0f0;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Simple PDF Test</h1>
+                        <div class="test-content">
+                            <p><strong>This is a simple test PDF.</strong></p>
+                            <p>If you can see this, PDF generation is working!</p>
+                            <p>Current time: ${new Date().toLocaleString()}</p>
+                            <p>Test content with red border and gray background.</p>
+                        </div>
+                        <p>This text should be visible in the PDF.</p>
+                        <p>Another paragraph for testing.</p>
+                    </body>
+                    </html>
+                `;
+                
+                const response = await fetch('/.netlify/functions/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html: simpleHtml })
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                // Check if response is actually base64 or binary
+                const responseText = await response.text();
+                console.log('Response text length:', responseText.length);
+                console.log('Response preview:', responseText.substring(0, 100));
+                
+                let pdfData;
+                
+                // Check if it looks like base64
+                const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+                const cleanText = responseText.replace(/\s/g, '');
+                const isBase64 = base64Regex.test(cleanText);
+                
+                console.log('Is base64 format:', isBase64);
+                
+                if (isBase64) {
+                    // Decode base64 to binary
+                    const binaryString = atob(cleanText);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                    console.log('Decoded PDF size:', pdfData.byteLength);
+                } else {
+                    // It's binary data, convert text back to binary
+                    const bytes = new Uint8Array(responseText.length);
+                    for (let i = 0; i < responseText.length; i++) {
+                        bytes[i] = responseText.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                    console.log('Binary PDF size:', pdfData.byteLength);
+                }
+                
+                // Check PDF header
+                const pdfHeader = new Uint8Array(pdfData.slice(0, 8));
+                const pdfHeaderText = String.fromCharCode.apply(null, Array.from(pdfHeader));
+                console.log('PDF header:', pdfHeaderText);
+                console.log('Is valid PDF header:', pdfHeaderText.startsWith('%PDF'));
+                
+                // Create blob and download
+                const blob = new Blob([pdfData], { type: 'application/pdf' });
+                const url = window.URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'simple-test.pdf';
+                a.click();
+                
+                window.URL.revokeObjectURL(url);
+                
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p>Simple PDF generated successfully.</p>
+                    <p>Size: ${pdfData.byteLength} bytes</p>
+                    <p>Header: ${pdfHeaderText}</p>
+                    <p>Valid PDF: ${pdfHeaderText.startsWith('%PDF')}</p>
+                `;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `
+                    <h3>Error</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 

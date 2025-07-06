@@ -42,7 +42,7 @@ export interface Database {
       products: {
         Row: {
           id: string;
-          design_name: string;
+          name: string;
           size: string;
           collection: string | null;
           surface: string | null;
@@ -63,7 +63,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          design_name: string;
+          name: string;
           size: string;
           collection?: string | null;
           surface?: string | null;
@@ -84,7 +84,7 @@ export interface Database {
         };
         Update: {
           id?: string;
-          design_name?: string;
+          name?: string;
           size?: string;
           collection?: string | null;
           surface?: string | null;

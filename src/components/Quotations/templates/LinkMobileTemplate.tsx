@@ -23,7 +23,7 @@ function mapQuotationToQuotationData(quotation: Quotation) {
         if (includeImages && item.product?.image_url) imageUrls.push(item.product.image_url);
         return {
           id: item.id || 'N/A',
-          description: item.product?.design_name || 'Product',
+          description: item.product?.name || 'Product',
           size: item.product?.size || '',
           surface: item.product?.surface || '',
           actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
@@ -50,7 +50,7 @@ function mapQuotationToQuotationData(quotation: Quotation) {
         if (includeImages && item.product?.image_url) imageUrls.push(item.product.image_url);
         return {
           id: item.id || 'N/A',
-          description: item.product?.design_name || 'Product',
+          description: item.product?.name || 'Product',
           size: item.product?.size || '',
           surface: item.product?.surface || '',
           actualSqftPerBox: item.product?.actual_sqft_per_box || 0,

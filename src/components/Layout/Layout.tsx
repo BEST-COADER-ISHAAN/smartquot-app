@@ -1,31 +1,28 @@
 import React, { useState } from 'react';
+import { Outlet } from 'react-router-dom';
 import Sidebar from '../Sidebar';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-content text-primary">
       <Sidebar isOpen={isSidebarOpen} onToggle={() => setIsSidebarOpen(!isSidebarOpen)} />
       
       {/* Main content with responsive margin */}
       <div className="transition-all duration-300 ease-in-out lg:ml-64">
         {/* Mobile header with menu button */}
-        <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-3">
+        <div className="lg:hidden bg-header shadow-sm border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-800">SmartQuot</h1>
-              <p className="text-sm text-gray-500">Quotation Management</p>
+              <h1 className="text-xl font-bold text-primary">SmartQuot</h1>
+              <p className="text-sm text-secondary">Quotation Management</p>
             </div>
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
@@ -34,7 +31,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         {/* Content area with responsive padding */}
         <div className="p-4 lg:p-8">
-          {children}
+          <main>
+            <Outlet />
+          </main>
         </div>
       </div>
 

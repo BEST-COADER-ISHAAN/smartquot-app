@@ -3,15 +3,15 @@ import { useAuth } from '../hooks/useAuth';
 import { User, Mail, Phone, MapPin, Building, CreditCard, Lock, Save, Edit, X } from 'lucide-react';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, session, loading, isAuthenticated } = useAuth();
   const [editing, setEditing] = useState(false);
   const [profile, setProfile] = useState({
-    companyName: 'Acme Pvt Ltd',
-    gstNo: '22AAAAA0000A1Z5',
-    address: '123, Main Street, City, State, 123456',
+    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'SmartQuot' : 'SmartQuot',
+    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '22AAAAA0000A1Z5' : '22AAAAA0000A1Z5',
+    address: typeof window !== 'undefined' ? localStorage.getItem('company_address') || '123, Main Street, City, State, 123456' : '123, Main Street, City, State, 123456',
     logo: '',
     subscription: 'Pro Plan (valid till 2025-12-31)',
-    phone: '+91-9876543210',
+    phone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-1234567890' : '+91-1234567890',
   });
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   const [logoPreview, setLogoPreview] = useState('');
@@ -41,6 +41,13 @@ const Profile: React.FC = () => {
   };
 
   const handleSave = () => {
+    // Save company details to localStorage for PDF export
+    localStorage.setItem('company_name', profile.companyName);
+    localStorage.setItem('company_address', profile.address);
+    localStorage.setItem('company_phone', profile.phone);
+    localStorage.setItem('company_email', user?.email || 'info@yourcompany.com');
+    localStorage.setItem('gst_no', profile.gstNo);
+    
     setEditing(false);
     // Save logic here - you can integrate with your backend
   };
@@ -163,7 +170,6 @@ const Profile: React.FC = () => {
               </label>
               <div className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg flex items-center">
                 {user?.email || 'user@example.com'}
-                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">From Auth0</span>
               </div>
             </div>
 

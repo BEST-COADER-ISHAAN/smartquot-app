@@ -98,44 +98,6 @@ const QuotationList: React.FC = () => {
     }
   };
 
-  const handleEdit = (quotation: Quotation) => {
-    // Debug: log the quotation object
-    console.log('Editing quotation:', quotation);
-    // Defensive: merge with defaults to ensure all fields are present
-    const defaultQuotation = {
-      customer_id: '',
-      status: 'draft',
-      is_area_wise: true,
-      include_images: false,
-      export_type: 'pdf' as 'pdf',
-      pdf_template: '',
-      link_template: '',
-      terms_conditions: '',
-      notes: '',
-      rooms: [
-        {
-          id: '',
-          quotation_id: '',
-          room_name: 'Living Room',
-          room_total: 0,
-          room_margin_amount: 0,
-          room_margin_percentage: 0,
-          sort_order: 0,
-          items: []
-        }
-      ]
-    };
-    const mergedQuotation = {
-      ...defaultQuotation,
-      ...quotation,
-      export_type: (quotation.export_type === 'pdf' || quotation.export_type === 'link' || quotation.export_type === 'both') ? quotation.export_type : 'pdf',
-      rooms: quotation.rooms && quotation.rooms.length > 0 ? quotation.rooms : defaultQuotation.rooms
-    };
-    setEditingQuotation(mergedQuotation);
-    setViewMode('edit');
-    setShowWizard(true);
-  };
-
   const handleView = (quotation: Quotation) => {
     navigate(`/quotations/${quotation.id}`);
   };
@@ -147,10 +109,9 @@ const QuotationList: React.FC = () => {
   };
 
   const handleSave = (quotation: Quotation) => {
-    setShowWizard(false);
-    setEditingQuotation(undefined);
-    setViewMode('edit');
-    loadQuotations(); // Reload the list
+    setEditingQuotation(quotation);
+    setViewMode('view');
+    setShowWizard(true);
   };
 
   const handleCancel = () => {
@@ -160,9 +121,10 @@ const QuotationList: React.FC = () => {
   };
 
   const handleDuplicate = async (quotation: Quotation) => {
-    // Create a copy of the quotation without IDs and quotation_number
+    // Create a copy of the quotation without IDs, quotation_number, created_at, updated_at
     const duplicatedQuotation: Partial<Quotation> = {
       customer_id: quotation.customer_id,
+      customer: quotation.customer,
       status: 'draft',
       quotation_number: undefined, // Explicitly set to undefined to let auto-generation work
       terms_conditions: quotation.terms_conditions,
@@ -176,12 +138,21 @@ const QuotationList: React.FC = () => {
         ...room,
         id: '',
         quotation_id: '',
+        created_at: undefined,
+        updated_at: undefined,
         items: room.items.map(item => ({
           ...item,
           id: '',
-          room_id: ''
+          room_id: '',
+          created_at: undefined,
+          updated_at: undefined,
         }))
-      }))
+      })),
+      created_at: undefined,
+      updated_at: undefined,
+      total_amount: undefined,
+      total_margin_amount: undefined,
+      total_margin_percentage: undefined,
     };
 
     setEditingQuotation(duplicatedQuotation as Quotation);
@@ -272,7 +243,7 @@ const QuotationList: React.FC = () => {
                 <div
                   key={quotation.id}
                   className="border-b border-gray-200 p-4 hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
-                  onClick={() => navigate(`/quotations/${quotation.id}/step3`)}
+                  onClick={() => navigate(`/quotations/${quotation.quotation_number.replace(/^#/, '')}/step3`)}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
@@ -280,15 +251,6 @@ const QuotationList: React.FC = () => {
                       <p className="text-gray-500 text-xs">{quotation.customer?.name || 'No Customer'}</p>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(quotation);
-                        }}
-                        className="p-1 text-blue-600 hover:text-blue-800"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -341,7 +303,7 @@ const QuotationList: React.FC = () => {
                     <tr
                       key={quotation.id}
                       className="hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
-                      onClick={() => navigate(`/quotations/${quotation.id}/step3`)}
+                      onClick={() => navigate(`/quotations/${quotation.quotation_number.replace(/^#/, '')}/step3`)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {quotation.quotation_number}
@@ -357,16 +319,6 @@ const QuotationList: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(quotation);
-                            }}
-                            className="text-blue-600 hover:text-blue-800 transition-colors duration-150"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

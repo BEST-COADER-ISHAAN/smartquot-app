@@ -1,41 +1,46 @@
-import { useAuth0 } from '@auth0/auth0-react';
-import { useEffect } from 'react';
-import { setAuth0UserContext, clearAuth0UserContext } from '../lib/supabase';
+import { useEffect, useState, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import type { User, Session, AuthOtpResponse } from '@supabase/supabase-js';
 
 export function useAuth() {
-  const { 
-    user, 
-    isAuthenticated, 
-    isLoading, 
-    loginWithRedirect, 
-    logout, 
-    getAccessTokenSilently 
-  } = useAuth0();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
 
-  // Set Auth0 user context for Supabase RLS policies
   useEffect(() => {
-    if (isAuthenticated && user) {
-      setAuth0UserContext(user);
-    } else if (!isAuthenticated) {
-      clearAuth0UserContext();
-    }
-  }, [isAuthenticated, user]);
-
-  const signOut = async () => {
-    await logout({
-      logoutParams: {
-        returnTo: "https://smartquot.net"
-      }
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
-    return { error: null };
-  };
+    // Initial load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = useCallback(async (options: { email: string }) => {
+    // Use Supabase magic link or social login
+    return supabase.auth.signInWithOtp({ email: options.email });
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+  }, []);
 
   return {
     user,
-    loading: isLoading,
-    isAuthenticated,
-    signOut,
-    loginWithRedirect,
-    getAccessTokenSilently
+    loading,
+    isAuthenticated: !!user,
+    login,
+    logout,
+    session,
   };
 }

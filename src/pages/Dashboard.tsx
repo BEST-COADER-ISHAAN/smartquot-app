@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
             if (!pid) return;
             if (!productStats[pid]) {
               productStats[pid] = {
-                name: item.product?.design_name || 'Product',
+                name: item.product?.name || 'Product',
                 revenue: 0,
                 unitsSold: 0,
                 category: item.product?.collection || 'General',

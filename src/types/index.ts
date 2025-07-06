@@ -45,7 +45,7 @@ export interface QuotationCustomer {
 
 export interface QuotationProduct {
   id: string;
-  design_name: string;
+  name: string;
   size: string;
   collection?: string;
   surface?: string;
@@ -69,19 +69,25 @@ export interface QuotationRoomItem {
   room_id: string;
   product_id: string;
   product?: QuotationProduct;
+  name?: string;
   quantity_boxes: number;
+  quantity?: number; // Added to match actual data
   rate_per_sqft: number;
   mrp_per_box: number;
   amount: number;
   margin_amount: number;
   margin_percentage: number;
   sort_order: number;
-  // Enhanced fields (no longer include column visibility controls)
   sqft_needed: number;
   box_needed: number;
   discount_percentage: number;
   price_per_sqft_override?: number;
   price_per_box_override?: number;
+  unit_price?: number;
+  total_price?: number;
+  price_per_box?: number;
+  price_per_sqft?: number;
+  product_description?: string;
 }
 
 export interface QuotationRoom {

@@ -6,6 +6,15 @@ interface PdfDetailedTemplateProps {
 }
 
 const PdfDetailedTemplate: React.FC<PdfDetailedTemplateProps> = ({ quotation }) => {
+  // Fetch company profile from localStorage
+  const companyProfile = {
+    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'Your Company Name' : 'Your Company Name',
+    companyAddress: typeof window !== 'undefined' ? localStorage.getItem('company_address') || 'Your Company Address' : 'Your Company Address',
+    companyPhone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-0000000000' : '+91-0000000000',
+    companyEmail: typeof window !== 'undefined' ? localStorage.getItem('company_email') || 'info@yourcompany.com' : 'info@yourcompany.com',
+    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '' : '',
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -47,15 +56,14 @@ const PdfDetailedTemplate: React.FC<PdfDetailedTemplateProps> = ({ quotation }) 
               <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
                 <div className="flex items-center mb-4">
                   <div className="w-3 h-3 bg-blue-600 rounded-full mr-3"></div>
-                  <h2 className="text-xl font-bold text-slate-800">From: Your Company</h2>
+                  <h2 className="text-xl font-bold text-slate-800">From: {companyProfile.companyName}</h2>
                 </div>
                 <div className="space-y-2 text-gray-700">
-                  <p className="font-semibold text-lg">Your Company Name</p>
-                  <p>123 Business Street, Suite 100</p>
-                  <p>City, State 12345</p>
-                  <p className="text-blue-600 font-medium">+91-98765-43210</p>
-                  <p className="text-blue-600 font-medium">info@yourcompany.com</p>
-                  <p className="text-sm text-gray-500 mt-2">GST: 27ABCDE1234F1Z5</p>
+                  <p className="font-semibold text-lg">{companyProfile.companyName}</p>
+                  <p>{companyProfile.companyAddress}</p>
+                  {companyProfile.companyPhone && <p className="text-blue-600 font-medium">{companyProfile.companyPhone}</p>}
+                  {companyProfile.companyEmail && <p className="text-blue-600 font-medium">{companyProfile.companyEmail}</p>}
+                  {companyProfile.gstNo && <p className="text-sm text-gray-500 mt-2">GST: {companyProfile.gstNo}</p>}
                 </div>
               </div>
               
@@ -155,7 +163,7 @@ const PdfDetailedTemplate: React.FC<PdfDetailedTemplateProps> = ({ quotation }) 
                             <tr key={itemIndex} className={itemIndex % 2 === 0 ? "bg-white" : "bg-gradient-to-r from-gray-50 to-blue-50"}>
                               <td className="px-4 py-4 align-top">
                                 <div className="space-y-1">
-                                  <div className="font-bold text-blue-900 text-base">{item.product?.design_name || 'Unknown Product'}</div>
+                                  <div className="font-bold text-blue-900 text-base">{item.product?.name || 'Unknown Product'}</div>
                                   {item.product?.collection && (
                                     <div className="text-sm text-purple-600 font-medium">Collection: {item.product.collection}</div>
                                   )}

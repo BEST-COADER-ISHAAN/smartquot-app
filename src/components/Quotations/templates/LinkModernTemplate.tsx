@@ -19,7 +19,7 @@ function mapQuotationToQuotationData(quotation: Quotation) {
       room_name: room.room_name,
       items: (room.items || []).map((item: any) => ({
         id: item.id || 'N/A',
-        description: item.product?.design_name || 'Product',
+        description: item.product?.name || 'Product',
         size: item.product?.size || '',
         surface: item.product?.surface || '',
         actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
@@ -41,7 +41,7 @@ function mapQuotationToQuotationData(quotation: Quotation) {
     items = ((quotation.rooms as any[] ?? [])).flatMap((room: any) =>
       (room.items || []).map((item: any) => ({
         id: item.id || 'N/A',
-        description: item.product?.design_name || 'Product',
+        description: item.product?.name || 'Product',
         size: item.product?.size || '',
         surface: item.product?.surface || '',
         actualSqftPerBox: item.product?.actual_sqft_per_box || 0,

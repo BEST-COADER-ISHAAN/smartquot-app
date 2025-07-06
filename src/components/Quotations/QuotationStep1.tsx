@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { supabaseAdmin } from '../../lib/supabaseAdmin';
 import { useDebounce } from '../../hooks/useDebounce';
 import CascadingProductSelector from '../Products/CascadingProductSelector';
+import { useAuth } from '../../hooks/useAuth';
 
 interface QuotationStep1Props {
   quotation: Partial<Quotation>;
@@ -13,6 +14,9 @@ interface QuotationStep1Props {
 }
 
 const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCancel }) => {
+  const { user, session } = useAuth();
+  console.log('Current user:', user);
+  console.log('Current session:', session);
   const [customers, setCustomers] = useState<QuotationCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [productSearch, setProductSearch] = useState('');
@@ -55,6 +59,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     sqft_in_box_type: quotation?.sqft_in_box_type || 'billed',
     show_sqft_in_box: quotation?.show_sqft_in_box || false,
     show_sqft_needed: quotation?.show_sqft_needed || false,
+    show_box_needed: quotation?.show_box_needed !== undefined ? quotation.show_box_needed : true, // Always visible by default
     show_price_per_sqft: quotation?.show_price_per_sqft || false,
     show_price_per_box: quotation?.show_price_per_box || false,
     show_amount: quotation?.show_amount || false,
@@ -133,18 +138,18 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
 
     setSearchLoading(true);
     try {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from('products')
-        .select('design_name')
+        .select('name')
         .eq('is_archived', false)
-        .ilike('design_name', `%${searchTerm}%`)
-        .order('design_name')
+        .ilike('name', `%${searchTerm}%`)
+        .order('name')
         .limit(100);
 
       if (error) throw error;
 
       // Get unique design names
-      const uniqueDesignNames = [...new Set(data.map(product => product.design_name))];
+      const uniqueDesignNames = [...new Set(data.map(product => product.name))];
       setFilteredDesignNames(uniqueDesignNames);
       setShowProductDropdown(true);
       setSelectedProductIndex(-1);
@@ -495,7 +500,8 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
   const handleNext = () => {
     const roomsWithTotals = recalculateRoomTotals(formData.rooms);
     const totals = calculateTotals();
-    onNext({ ...formData, rooms: roomsWithTotals, ...totals });
+    const selectedCustomer = customers.find(c => c.id === formData.customer_id);
+    onNext({ ...formData, rooms: roomsWithTotals, ...totals, customer: selectedCustomer });
   };
 
   const getVisibleColumnsPreview = () => {
@@ -503,7 +509,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     columns.push('Name', 'Size', 'Surface'); // Always visible
     if (formData.show_sqft_in_box) columns.push(`SQFT in Box (${formData.sqft_in_box_type})`);
     if (formData.show_sqft_needed) columns.push('SQFT Needed');
-    columns.push('Quantity'); // Always visible
+    if (formData.show_box_needed) columns.push('Quantity');
     if (formData.show_price_per_sqft) columns.push('Price/SQFT');
     if (formData.show_price_per_box) columns.push('Price/Box');
     if (formData.show_amount) columns.push('Amount');
@@ -512,9 +518,10 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
   };
 
   const getActiveColumnsCount = () => {
-    let count = 4; // Always visible: Name, Size, Surface, Quantity
+    let count = 3; // Always visible: Name, Size, Surface
     if (formData.show_sqft_in_box) count++;
     if (formData.show_sqft_needed) count++;
+    if (formData.show_box_needed) count++;
     if (formData.show_price_per_sqft) count++;
     if (formData.show_price_per_box) count++;
     if (formData.show_amount) count++;
@@ -763,6 +770,20 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
               <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
+                  id="show_box_needed"
+                  checked={formData.show_box_needed}
+                  onChange={(e) => handleInputChange('show_box_needed', e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="show_box_needed" className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                  {formData.show_box_needed ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  <span>Quantity</span>
+                </label>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
                   id="show_price_per_sqft"
                   checked={formData.show_price_per_sqft}
                   onChange={(e) => handleInputChange('show_price_per_sqft', e.target.checked)}
@@ -996,7 +1017,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
                     <tbody className="bg-white divide-y divide-gray-200">
                       {room.items.map((item, itemIndex) => (
                         <tr key={itemIndex} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.design_name}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.name || item.name}</td>
                           <td className="px-4 py-2 text-sm text-gray-900">{item.product?.size}</td>
                           <td className="px-4 py-2 text-sm text-gray-900">{item.product?.surface || '-'}</td>
                           {formData.show_sqft_in_box && (

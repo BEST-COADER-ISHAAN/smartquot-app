@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Local PDF Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        .result { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <h1>Local PDF Test</h1>
+    <button onclick="generateLocalPDF()">Generate Local PDF</button>
+    <div id="result" class="result"></div>
+
+    <script>
+        function generateLocalPDF() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Generating PDF...';
+            
+            try {
+                // Create a new PDF document
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Add content to the PDF
+                doc.setFontSize(20);
+                doc.text('Local PDF Test', 20, 20);
+                
+                doc.setFontSize(12);
+                doc.text('This is a test PDF generated locally.', 20, 40);
+                doc.text('If you can see this, PDF generation is working!', 20, 50);
+                doc.text('Current time: ' + new Date().toLocaleString(), 20, 60);
+                
+                // Add a simple table
+                doc.setFontSize(14);
+                doc.text('Test Table:', 20, 80);
+                doc.setFontSize(10);
+                doc.text('Item 1: Test Data', 20, 90);
+                doc.text('Item 2: More Data', 20, 100);
+                doc.text('Item 3: Final Data', 20, 110);
+                
+                // Save the PDF
+                doc.save('local-test.pdf');
+                
+                resultDiv.innerHTML = `
+                    <h3>Success!</h3>
+                    <p>Local PDF generated successfully.</p>
+                    <p>Check your downloads folder for 'local-test.pdf'</p>
+                `;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `
+                    <h3>Error</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 
