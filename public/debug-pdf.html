@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        .result { margin: 20px 0; padding: 10px; border: 1px solid #ccc; white-space: pre-wrap; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>PDF Generation Debug Test</h1>
+    <button onclick="testPDFGeneration()">Test PDF Generation</button>
+    <div id="result" class="result"></div>
+
+    <script>
+        async function testPDFGeneration() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing PDF generation...\n';
+            
+            try {
+                // Simple test HTML
+                const testHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Test PDF</title>
+                        <style>
+                            body { 
+                                font-family: Arial, sans-serif; 
+                                padding: 20px; 
+                                margin: 0;
+                                background-color: white;
+                            }
+                            h1 { 
+                                color: blue; 
+                                font-size: 24px;
+                                margin-bottom: 20px;
+                            }
+                            p { 
+                                font-size: 16px;
+                                margin-bottom: 10px;
+                                color: black;
+                            }
+                            .test-box {
+                                border: 2px solid red;
+                                padding: 20px;
+                                margin: 20px 0;
+                                background-color: #f0f0f0;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>PDF Generation Test</h1>
+                        <div class="test-box">
+                            <p><strong>This is a test PDF.</strong></p>
+                            <p>If you can see this, PDF generation is working!</p>
+                            <p>Current time: ${new Date().toLocaleString()}</p>
+                        </div>
+                        <p>This text should be visible in the PDF.</p>
+                        <p>Another paragraph for testing.</p>
+                    </body>
+                    </html>
+                `;
+                
+                resultDiv.innerHTML += 'Sending request to Netlify function...\n';
+                
+                const response = await fetch('/.netlify/functions/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html: testHtml })
+                });
+                
+                resultDiv.innerHTML += `Response status: ${response.status}\n`;
+                resultDiv.innerHTML += `Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}\n`;
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    resultDiv.innerHTML += `ERROR: HTTP ${response.status} - ${errorText}\n`;
+                    resultDiv.className = 'result error';
+                    return;
+                }
+                
+                const responseText = await response.text();
+                resultDiv.innerHTML += `Response text length: ${responseText.length}\n`;
+                resultDiv.innerHTML += `Response preview: ${responseText.substring(0, 200)}\n`;
+                
+                // Check if response is JSON error
+                try {
+                    const errorCheck = JSON.parse(responseText);
+                    if (errorCheck.error) {
+                        resultDiv.innerHTML += `ERROR: ${errorCheck.error}\n`;
+                        resultDiv.innerHTML += `Stack: ${errorCheck.stack}\n`;
+                        resultDiv.className = 'result error';
+                        return;
+                    }
+                } catch (e) {
+                    // Not JSON, continue
+                }
+                
+                // Check if it looks like base64
+                const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+                const cleanText = responseText.replace(/\s/g, '');
+                const isBase64 = base64Regex.test(cleanText);
+                
+                resultDiv.innerHTML += `Is base64 format: ${isBase64}\n`;
+                
+                let pdfData;
+                
+                if (isBase64) {
+                    const binaryString = atob(cleanText);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                    resultDiv.innerHTML += `Decoded PDF size: ${pdfData.byteLength} bytes\n`;
+                } else {
+                    const bytes = new Uint8Array(responseText.length);
+                    for (let i = 0; i < responseText.length; i++) {
+                        bytes[i] = responseText.charCodeAt(i);
+                    }
+                    pdfData = bytes.buffer;
+                    resultDiv.innerHTML += `Binary PDF size: ${pdfData.byteLength} bytes\n`;
+                }
+                
+                // Check PDF header
+                const pdfHeader = new Uint8Array(pdfData.slice(0, 8));
+                const pdfHeaderText = String.fromCharCode.apply(null, Array.from(pdfHeader));
+                resultDiv.innerHTML += `PDF header: ${pdfHeaderText}\n`;
+                resultDiv.innerHTML += `Is valid PDF: ${pdfHeaderText.startsWith('%PDF')}\n`;
+                
+                if (!pdfHeaderText.startsWith('%PDF')) {
+                    resultDiv.innerHTML += 'ERROR: Invalid PDF header\n';
+                    resultDiv.className = 'result error';
+                    return;
+                }
+                
+                // Create blob and download
+                const blob = new Blob([pdfData], { type: 'application/pdf' });
+                resultDiv.innerHTML += `Blob size: ${blob.size} bytes\n`;
+                
+                if (blob.size === 0) {
+                    resultDiv.innerHTML += 'ERROR: Generated PDF is empty\n';
+                    resultDiv.className = 'result error';
+                    return;
+                }
+                
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'debug-test.pdf';
+                a.click();
+                
+                resultDiv.innerHTML += 'SUCCESS: PDF generated and downloaded!\n';
+                resultDiv.className = 'result success';
+                
+                // Clean up
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(url);
+                }, 5000);
+                
+            } catch (error) {
+                resultDiv.innerHTML += `ERROR: ${error.message}\n`;
+                resultDiv.innerHTML += `Stack: ${error.stack}\n`;
+                resultDiv.className = 'result error';
+            }
+        }
+    </script>
+</body>
+</html> 
