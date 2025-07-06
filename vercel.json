@@ -18,5 +18,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "netlify/functions/*.cjs": {
+      "runtime": "nodejs20.x"
+    }
+  }
 } 
