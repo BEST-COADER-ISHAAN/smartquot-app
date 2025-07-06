@@ -1,4 +1,5 @@
-const puppeteer = require('puppeteer');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
 const os = require('os');
 
 exports.handler = async (event) => {
@@ -35,21 +36,11 @@ exports.handler = async (event) => {
 
     console.log('Launching browser...');
     const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--single-process',
-        '--disable-extensions'
-      ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
     console.log('Browser launched successfully');
 
