@@ -95,17 +95,31 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html: fullHtml })
         });
-        if (!response.ok) throw new Error('Failed to generate PDF');
         
         console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
-        console.log('All response headers:', Object.fromEntries(response.headers.entries()));
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Netlify function error:', errorText);
+          throw new Error(`PDF generation failed: ${response.status} - ${errorText}`);
+        }
         
         // Check if response is actually base64 or binary
         const responseText = await response.text();
         console.log('Response text length:', responseText.length);
         console.log('Response preview:', responseText.substring(0, 100));
+        
+        // Check if response is an error JSON
+        try {
+          const errorCheck = JSON.parse(responseText);
+          if (errorCheck.error) {
+            console.error('Netlify function returned error:', errorCheck);
+            throw new Error(`PDF generation failed: ${errorCheck.error}`);
+          }
+        } catch (e) {
+          // Not JSON, continue with PDF processing
+        }
         
         let pdfData;
         
@@ -142,13 +156,20 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
         console.log('PDF header bytes:', Array.from(pdfHeader));
         console.log('First 20 bytes:', Array.from(new Uint8Array(pdfData.slice(0, 20))));
         
-        // Temporarily allow any header for debugging
-        console.log('Is valid PDF header:', pdfHeaderText.startsWith('%PDF'));
+        // Check if PDF is valid
+        if (!pdfHeaderText.startsWith('%PDF')) {
+          console.error('Invalid PDF header:', pdfHeaderText);
+          throw new Error('Generated PDF is not valid. Please try again.');
+        }
         
         // Create blob from PDF data
         const blob = new Blob([pdfData], { type: 'application/pdf' });
         console.log('Blob size:', blob.size);
         console.log('Blob type:', blob.type);
+        
+        if (blob.size === 0) {
+          throw new Error('Generated PDF is empty. Please try again.');
+        }
         
         // Ensure blob is fully ready before creating URL
         await new Promise(resolve => setTimeout(resolve, 100));

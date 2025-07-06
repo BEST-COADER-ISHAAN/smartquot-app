@@ -16,7 +16,13 @@ exports.handler = async (event) => {
   }
 
   try {
-    console.log('Starting PDF generation...');
+    console.log('=== PDF Generation Started ===');
+    console.log('Environment:', process.env.NODE_ENV || 'development');
+    console.log('Platform:', process.platform);
+    console.log('Architecture:', process.arch);
+    console.log('Node version:', process.version);
+    console.log('Available memory:', process.memoryUsage());
+    
     const { html } = JSON.parse(event.body);
     console.log('Received HTML length:', html.length);
     console.log('HTML preview (first 500 chars):', html.substring(0, 500));
@@ -37,20 +43,32 @@ exports.handler = async (event) => {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu'
-      ]
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--single-process',
+        '--disable-extensions'
+      ],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
     });
     console.log('Browser launched successfully');
 
     console.log('Creating new page...');
     const page = await browser.newPage();
+    
+    // Set viewport for consistent rendering
+    await page.setViewport({ width: 1200, height: 800 });
+    
     console.log('Navigating to HTML file...');
-    await page.goto('file://' + tempHtmlPath, { waitUntil: 'networkidle0' });
+    await page.goto('file://' + tempHtmlPath, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
     console.log('Page loaded successfully');
 
     // Wait for CSS to load and render
     console.log('Waiting for CSS to load...');
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for CSS to load
+    await new Promise(resolve => setTimeout(resolve, 3000)); // Increased wait time
     
     // Debug: Check what's actually on the page
     const pageContent = await page.evaluate(() => {
@@ -101,7 +119,8 @@ exports.handler = async (event) => {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '20mm', bottom: '20mm', left: '10mm', right: '10mm' }
+      margin: { top: '20mm', bottom: '20mm', left: '10mm', right: '10mm' },
+      preferCSSPageSize: true
     });
     console.log('PDF generated successfully, size:', pdfBuffer.length);
     console.log('PDF buffer first 100 bytes:', Array.from(pdfBuffer.slice(0, 100)));
@@ -111,6 +130,10 @@ exports.handler = async (event) => {
     const pdfHeader = pdfBuffer.slice(0, 8).toString();
     console.log('PDF header:', pdfHeader);
     console.log('Is valid PDF header:', pdfHeader.startsWith('%PDF'));
+
+    if (!pdfHeader.startsWith('%PDF')) {
+      throw new Error('Generated PDF does not have valid PDF header');
+    }
 
     console.log('Closing browser...');
     await browser.close();
@@ -132,14 +155,27 @@ exports.handler = async (event) => {
       isBase64Encoded: true,
     };
   } catch (error) {
-    console.error('PDF generation error:', error);
+    console.error('=== PDF Generation Error ===');
+    console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
+    console.error('Error type:', error.constructor.name);
+    console.error('Error code:', error.code);
+    console.error('Error signal:', error.signal);
+    
     return {
       statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
       body: JSON.stringify({ 
         error: error.message,
         stack: error.stack,
-        type: error.constructor.name
+        type: error.constructor.name,
+        code: error.code,
+        signal: error.signal
       }),
     };
   }
