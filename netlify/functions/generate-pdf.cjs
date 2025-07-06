@@ -1,4 +1,4 @@
-const chromium = require('@sparticuz/chromium-min');
+const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 const os = require('os');
 
@@ -24,12 +24,6 @@ exports.handler = async (event) => {
     console.log('Node version:', process.version);
     console.log('Available memory:', process.memoryUsage());
     
-    // Debug chromium object
-    console.log('Chromium object keys:', Object.keys(chromium));
-    console.log('Chromium executablePath:', chromium.executablePath);
-    console.log('Chromium args:', chromium.args);
-    console.log('Chromium headless:', chromium.headless);
-    
     const { html } = JSON.parse(event.body);
     console.log('Received HTML length:', html.length);
     console.log('HTML preview (first 500 chars):', html.substring(0, 500));
@@ -41,50 +35,11 @@ exports.handler = async (event) => {
     console.log('HTML file written to:', tempHtmlPath);
 
     console.log('Launching browser...');
-    
-    // Try to find the executable path
-    let executablePath = chromium.executablePath;
-    if (!executablePath) {
-      console.log('Chromium executablePath is undefined, trying alternative paths...');
-      // Try common paths for chromium in serverless environments
-      const possiblePaths = [
-        '/opt/chromium',
-        '/opt/chromium/chromium',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/google-chrome',
-        process.env.CHROME_EXECUTABLE_PATH
-      ].filter(Boolean);
-      
-      for (const path of possiblePaths) {
-        if (fs.existsSync(path)) {
-          executablePath = path;
-          console.log('Found executable at:', path);
-          break;
-        }
-      }
-      
-      if (!executablePath) {
-        throw new Error('Could not find Chromium executable. Available paths checked: ' + possiblePaths.join(', '));
-      }
-    }
-    
     const browser = await puppeteer.launch({
-      args: chromium.args || [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--single-process',
-        '--disable-extensions'
-      ],
-      defaultViewport: chromium.defaultViewport || { width: 1200, height: 800 },
-      executablePath: executablePath,
-      headless: chromium.headless !== false ? true : false,
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless,
       ignoreHTTPSErrors: true,
     });
     console.log('Browser launched successfully');
