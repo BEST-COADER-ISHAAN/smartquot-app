@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Quotation } from '../../types';
 import { supabase } from '../../lib/supabase';
 import QuotationWizard from './QuotationWizard';
+import { useAuth } from '../../hooks/useAuth';
 
 const QuotationList: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ const QuotationList: React.FC = () => {
   const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const { user, isAuthenticated } = useAuth();
 
   // Listen for keyboard shortcut events and handle /quotations/new route
   useEffect(() => {
@@ -228,7 +230,22 @@ const QuotationList: React.FC = () => {
 
   const handleDelete = async () => {
     if (!quotationToDelete) return;
-    await supabase.from('quotations').delete().eq('id', quotationToDelete.id);
+    if (!isAuthenticated) {
+      alert('You must be logged in to delete a quotation.');
+      return;
+    }
+    // First, delete related quotation_rooms
+    const { error: roomsError } = await supabase.from('quotation_rooms').delete().eq('quotation_id', quotationToDelete.id);
+    if (roomsError) {
+      alert('Failed to delete related rooms: ' + roomsError.message);
+      return;
+    }
+    // Then, delete the quotation
+    const { error } = await supabase.from('quotations').delete().eq('id', quotationToDelete.id);
+    if (error) {
+      alert('Failed to delete quotation: ' + error.message);
+      return;
+    }
     setDeleteDialogOpen(false);
     setQuotationToDelete(null);
     loadQuotations();
@@ -565,7 +582,7 @@ const QuotationList: React.FC = () => {
           <p className="text-red-700 font-medium mt-2 mb-4">Are you sure you want to delete this quotation? This action cannot be undone.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="border-gray-300">Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white shadow">Delete</Button>
+            <Button variant="destructive" onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white shadow" disabled={!isAuthenticated}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
