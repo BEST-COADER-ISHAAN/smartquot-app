@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle, Download, Plus, TrendingUp, DollarSign, Percent, Edit, Share, Eye, FileText, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Download, Plus, TrendingUp, IndianRupee, Percent, Edit, Eye, FileText, ArrowLeft } from 'lucide-react';
 import { Quotation } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../lib/api';
@@ -24,7 +24,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
   const [loading, setLoading] = useState(false);
   const [savedQuotation, setSavedQuotation] = useState<Quotation | null>(existingQuotation || null);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewType, setPreviewType] = useState<'pdf' | 'link'>('pdf');
+  const [previewType, setPreviewType] = useState<'pdf' | 'link' | 'both'>('pdf');
   const [previewTemplate, setPreviewTemplate] = useState<string>('standard');
 
   const token = session?.access_token;
@@ -70,6 +70,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
         created_by: userId,
         rooms: quotation.rooms || [], // <-- Ensure rooms are sent
       };
+
       console.log('Quotation data to save:', quotationData);
 
       // Debug log before API call
@@ -82,7 +83,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
 
       setSavedQuotation(response.data);
       console.log('Quotation saved successfully:', response.data);
-      onFinish(response.data);
+      onFinish(response.data); // Pass the created quotation to parent
     } catch (error) {
       console.error('Error saving quotation:', error);
       alert(error instanceof Error ? error.message : 'Failed to save quotation');
@@ -94,20 +95,6 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
   const handleFinish = () => {
     if (savedQuotation) {
       onFinish(savedQuotation);
-    }
-  };
-
-  const handleShare = () => {
-    if (savedQuotation) {
-      // Use quotation_number instead of ID for the URL
-      const shareUrl = `${window.location.origin}/quotations/shared/${savedQuotation.quotation_number}`;
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        alert(`Shareable link copied to clipboard: ${shareUrl}`);
-      }).catch(() => {
-        alert(`Shareable link: ${shareUrl}`);
-      });
-    } else {
-      alert('Link sharing will be available after the quotation is saved.');
     }
   };
 
@@ -124,7 +111,8 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
     const quotationToUse = savedQuotation || quotation;
     if (quotationToUse) {
       const exportType = quotationToUse.export_type || 'pdf';
-      setPreviewType(exportType === 'both' ? 'link' : exportType as 'pdf' | 'link');
+      // Keep the original export type for the preview component
+      setPreviewType(exportType as 'pdf' | 'link' | 'both');
       setPreviewTemplate(
         exportType === 'link' || exportType === 'both' 
           ? quotationToUse.link_template || 'modern'
@@ -134,12 +122,9 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
     }
   };
 
-  const handleEdit = () => {
-    // Go back to edit mode by calling onFinish with current quotation
-    if (savedQuotation) {
-      // This will close the view mode and allow editing
-      window.location.reload(); // Simple way to reset to edit mode
-    }
+  const handleCreateNewQuotation = () => {
+    // Navigate to the quotations list page where user can create a new quotation
+    window.location.href = '/quotations';
   };
 
   // If we're in view mode and have an existing quotation, show the success state directly
@@ -253,7 +238,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             <div className="grid md:grid-cols-3 gap-6">
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{existingQuotation.total_margin_amount?.toFixed(2) || '0.00'}
                   </div>
@@ -273,7 +258,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
               
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{((existingQuotation.total_amount || 0) - (existingQuotation.total_margin_amount || 0)).toFixed(2)}
                   </div>
@@ -284,31 +269,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="grid md:grid-cols-4 gap-4">
-            <button
-              onClick={handleEdit}
-              className="flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              <Edit className="w-5 h-5" />
-              <span>Edit</span>
-            </button>
-            
-            <button
-              onClick={handleShare}
-              className="flex items-center justify-center space-x-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
-            >
-              <Share className="w-5 h-5" />
-              <span>Share</span>
-            </button>
-            
-            <button
-              onClick={handleDownload}
-              className="flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-            >
-              <Download className="w-5 h-5" />
-              <span>Download PDF</span>
-            </button>
-            
+          <div className="flex justify-center">
             <button
               onClick={handlePreview}
               className="flex items-center justify-center space-x-2 px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors duration-200"
@@ -328,7 +289,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             </button>
             
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleCreateNewQuotation}
               className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               <Plus className="w-4 h-4" />
@@ -432,7 +393,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             <div className="grid md:grid-cols-3 gap-6">
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{quotation.total_margin_amount?.toFixed(2) || '0.00'}
                   </div>
@@ -450,7 +411,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
               </div>
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{((quotation.total_amount || 0) - (quotation.total_margin_amount || 0)).toFixed(2)}
                   </div>
@@ -592,7 +553,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             <div className="grid md:grid-cols-3 gap-6">
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{sq.total_margin_amount?.toFixed(2)}
                   </div>
@@ -610,7 +571,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
               </div>
               <div className="text-center">
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                   <div className="text-2xl font-bold text-green-800">
                     ₹{((sq.total_amount || 0) - (sq.total_margin_amount || 0)).toFixed(2)}
                   </div>
@@ -620,21 +581,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             </div>
           </div>
           {/* Action Buttons */}
-          <div className="grid md:grid-cols-3 gap-4">
-            <button
-              onClick={handleShare}
-              className="flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              <Share className="w-5 h-5" />
-              <span>Share</span>
-            </button>
-            <button
-              onClick={handleDownload}
-              className="flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-            >
-              <Download className="w-5 h-5" />
-              <span>Download PDF</span>
-            </button>
+          <div className="flex justify-center">
             <button
               onClick={handlePreview}
               className="flex items-center justify-center space-x-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
@@ -652,7 +599,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
               Back to Quotations
             </button>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleCreateNewQuotation}
               className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               <Plus className="w-4 h-4" />
@@ -718,7 +665,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
           <div className="grid md:grid-cols-3 gap-6">
             <div className="text-center">
               <div className="bg-white rounded-lg p-4 border border-green-200">
-                <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-green-800">
                   ₹{savedQuotation?.total_margin_amount?.toFixed(2)}
                 </div>
@@ -738,7 +685,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
             
             <div className="text-center">
               <div className="bg-white rounded-lg p-4 border border-green-200">
-                <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <IndianRupee className="w-8 h-8 text-green-600 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-green-800">
                   ₹{((savedQuotation?.total_amount || 0) - (savedQuotation?.total_margin_amount || 0)).toFixed(2)}
                 </div>
@@ -749,23 +696,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <button
-            onClick={handleShare}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-          >
-            <Share className="w-5 h-5" />
-            <span>Share</span>
-          </button>
-          
-          <button
-            onClick={handleDownload}
-            className="flex items-center justify-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-          >
-            <Download className="w-5 h-5" />
-            <span>Download PDF</span>
-          </button>
-          
+        <div className="flex justify-center">
           <button
             onClick={handlePreview}
             className="flex items-center justify-center space-x-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
@@ -785,7 +716,7 @@ const QuotationStep3: React.FC<QuotationStep3Props> = ({
           </button>
           
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleCreateNewQuotation}
             className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
           >
             <Plus className="w-4 h-4" />

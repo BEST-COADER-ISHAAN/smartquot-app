@@ -24,7 +24,7 @@ interface ProductRow {
   freight: number;
 }
 
-const REQUIRED_FIELDS = ['name', 'size', 'ex_factory_price', 'mrp_per_sqft', 'mrp_per_box', 'gst_percentage', 'insurance_percentage', 'actual_sqft_per_box', 'billed_sqft_per_box', 'weight', 'freight'];
+const REQUIRED_FIELDS = ['name', 'size', 'ex_factory_price', 'mrp_per_sqft', 'mrp_per_box', 'gst_percentage', 'insurance_percentage', 'actual_sqft_per_box', 'weight', 'freight'];
 
 const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose }) => {
   const { user, session } = useAuth();
@@ -38,7 +38,7 @@ const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose
 
   // Downloadable CSV template
   const downloadTemplate = () => {
-    const csvContent = `name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight\nSPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,15.5,32,2`;
+    const csvContent = `design_name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight\nSPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,15.5,32,2`;
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -55,23 +55,33 @@ const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length === 0) return [];
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    return lines.slice(1).map(line => {
+    console.log('CSV Headers:', headers);
+    console.log('Expected headers:', ['name', 'size', 'collection', 'surface', 'ex_factory_price', 'mrp_per_sqft', 'mrp_per_box', 'gst_percentage', 'insurance_percentage', 'actual_sqft_per_box', 'billed_sqft_per_box', 'weight', 'freight']);
+    
+    const rows = lines.slice(1).map(line => {
       const values = line.split(',').map(v => v.trim());
       const row: any = {};
       headers.forEach((header, i) => {
         const value = values[i] || '';
+        // Map design_name to name
+        const mappedHeader = header === 'design_name' ? 'name' : header;
+        
         if ([
           'ex_factory_price', 'mrp_per_sqft', 'mrp_per_box', 'gst_percentage',
           'insurance_percentage', 'actual_sqft_per_box', 'billed_sqft_per_box', 'weight', 'freight'
-        ].includes(header)) {
+        ].includes(mappedHeader)) {
           const numValue = parseFloat(value.replace(/[^\d.-]/g, ''));
-          row[header] = isNaN(numValue) ? 0 : numValue;
+          row[mappedHeader] = isNaN(numValue) ? 0 : numValue;
         } else {
-          row[header] = value;
+          row[mappedHeader] = value;
         }
       });
       return row;
     }).filter(row => row.name && row.size);
+    
+    console.log('Parsed rows:', rows.length);
+    console.log('First few rows:', rows.slice(0, 3));
+    return rows;
   };
 
   // Validate each row and return array of error arrays
@@ -89,7 +99,10 @@ const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose
       if (row.gst_percentage < 0) errors.push('gst_percentage must be >= 0');
       if (row.insurance_percentage < 0) errors.push('insurance_percentage must be >= 0');
       if (row.actual_sqft_per_box <= 0) errors.push('actual_sqft_per_box must be > 0');
-      if (row.billed_sqft_per_box <= 0) errors.push('billed_sqft_per_box must be > 0');
+      // billed_sqft_per_box is optional - only validate if provided and not empty
+      if (row.billed_sqft_per_box !== undefined && row.billed_sqft_per_box !== null && row.billed_sqft_per_box !== '' && row.billed_sqft_per_box <= 0) {
+        errors.push('billed_sqft_per_box must be > 0');
+      }
       if (row.weight < 0) errors.push('weight must be >= 0');
       if (row.freight < 0) errors.push('freight must be >= 0');
       return errors;
@@ -126,6 +139,7 @@ const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose
         return {
           ...rest,
           name: name,
+          billed_sqft_per_box: row.billed_sqft_per_box !== undefined ? row.billed_sqft_per_box : row.actual_sqft_per_box,
           user_id: user.id,
           created_by: user.id,
         };
@@ -184,18 +198,68 @@ const ExcelImporter: React.FC<ExcelImporterProps> = ({ onImportComplete, onClose
                         <td key={i} className="px-2 py-1 border-b">{val}</td>
                       ))}
                       <td className="px-2 py-1 border-b text-red-600">
-                        {validationErrors[idx].join('; ')}
+                        {validationErrors[idx].length > 0 && (
+                          <span className="text-xs">
+                            {validationErrors[idx].length} error{validationErrors[idx].length > 1 ? 's' : ''}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            
+            {/* Error Summary */}
+            {validationErrors.some(e => e.length > 0) && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
+                <h4 className="font-medium text-red-800 mb-2">Validation Errors Summary</h4>
+                <div className="text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                  {(() => {
+                    const errorCounts: Record<string, number> = {};
+                    validationErrors.forEach(errors => {
+                      errors.forEach(error => {
+                        errorCounts[error] = (errorCounts[error] || 0) + 1;
+                      });
+                    });
+                    return Object.entries(errorCounts).map(([error, count]) => (
+                      <div key={error} className="flex justify-between">
+                        <span>{error}</span>
+                        <span className="font-medium">{count} row{count > 1 ? 's' : ''}</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button onClick={() => setStep('upload')} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Back</button>
-              <button onClick={handleImport} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={importing || previewRows.length === 0 || validationErrors.some(e => e.length > 0)}>
+              <button 
+                onClick={handleImport} 
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" 
+                disabled={importing || previewRows.length === 0 || validationErrors.some(e => e.length > 0)}
+              >
                 {importing ? 'Importing...' : 'Import Products'}
               </button>
+            </div>
+            {/* Debug information */}
+            <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
+              <p><strong>Debug Info:</strong></p>
+              <p>Importing: {importing.toString()}</p>
+              <p>Preview rows: {previewRows.length}</p>
+              <p>Rows with errors: {validationErrors.filter(e => e.length > 0).length}</p>
+              <p>Button disabled: {(importing || previewRows.length === 0 || validationErrors.some(e => e.length > 0)).toString()}</p>
+              {validationErrors.some(e => e.length > 0) && (
+                <div className="mt-2">
+                  <p><strong>Validation Errors:</strong></p>
+                  {validationErrors.map((errors, idx) => (
+                    errors.length > 0 && (
+                      <p key={idx} className="text-red-600">Row {idx + 1}: {errors.join(', ')}</p>
+                    )
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

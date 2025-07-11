@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyboard Shortcuts Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .shortcut-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .shortcut-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #007bff;
+        }
+        .shortcut-key {
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #495057;
+        }
+        .category {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #dee2e6;
+        }
+        .category h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        .test-area {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        .test-area input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .log {
+            background: #343a40;
+            color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Keyboard Shortcuts Test</h1>
+        <p>This page tests the keyboard shortcuts implementation. Try pressing the shortcuts below and check the log.</p>
+        
+        <div class="test-area">
+            <h3>Test Area</h3>
+            <p>Try typing in this input field - shortcuts should NOT trigger when typing:</p>
+            <input type="text" placeholder="Type here to test that shortcuts don't trigger while typing..." />
+            
+            <h4>Event Log:</h4>
+            <div id="log" class="log"></div>
+        </div>
+
+        <div class="category">
+            <h3>Available Shortcuts</h3>
+            <div class="shortcut-list">
+                <div class="shortcut-item">
+                    <strong>Alt + N</strong>
+                    <div>New Quotation</div>
+                    <span class="shortcut-key">Alt + N</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + P</strong>
+                    <div>New Product</div>
+                    <span class="shortcut-key">Alt + P</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + C</strong>
+                    <div>New Customer</div>
+                    <span class="shortcut-key">Alt + C</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + S</strong>
+                    <div>Settings</div>
+                    <span class="shortcut-key">Alt + S</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + D</strong>
+                    <div>Dashboard</div>
+                    <span class="shortcut-key">Alt + D</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + L</strong>
+                    <div>Product List</div>
+                    <span class="shortcut-key">Alt + L</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + Q</strong>
+                    <div>Quotation List</div>
+                    <span class="shortcut-key">Alt + Q</span>
+                </div>
+                
+                <div class="shortcut-item">
+                    <strong>Alt + U</strong>
+                    <div>Customer List</div>
+                    <span class="shortcut-key">Alt + U</span>
+                </div>
+                
+
+            </div>
+        </div>
+
+        <div class="category">
+            <h3>Implementation Notes</h3>
+            <ul>
+                <li>Shortcuts use Alt key as modifier</li>
+                <li>Shortcuts don't trigger when typing in input fields</li>
+                <li>Shortcuts are registered globally</li>
+                <li>Navigation shortcuts use React Router</li>
+                <li>Action shortcuts dispatch custom events</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Mock keyboard shortcuts for testing
+        const shortcuts = {
+            'Alt+N': 'New Quotation',
+            'Alt+P': 'New Product', 
+            'Alt+C': 'New Customer',
+            'Alt+S': 'Settings',
+            'Alt+D': 'Dashboard',
+            'Alt+L': 'Product List',
+            'Alt+Q': 'Quotation List',
+            'Alt+U': 'Customer List',
+
+        };
+
+        const log = document.getElementById('log');
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        document.addEventListener('keydown', (event) => {
+            // Don't trigger shortcuts when typing in input fields
+            if (event.target instanceof HTMLInputElement || 
+                event.target instanceof HTMLTextAreaElement || 
+                event.target instanceof HTMLSelectElement) {
+                return;
+            }
+            
+            // Check for Alt key combinations
+            if (event.altKey && !event.ctrlKey && !event.shiftKey) {
+                const key = event.key.toLowerCase();
+                const shortcutKey = `Alt+${event.key.toUpperCase()}`;
+                
+                if (shortcuts[shortcutKey]) {
+                    event.preventDefault();
+                    addLog(`Shortcut triggered: ${shortcutKey} - ${shortcuts[shortcutKey]}`);
+                    
+                    // Simulate the actual behavior
+                    if (shortcutKey === 'Alt+N') {
+                        addLog('  → Would open Quotation Wizard');
+                    } else if (shortcutKey === 'Alt+P') {
+                        addLog('  → Would open Product Editor');
+                    } else if (shortcutKey === 'Alt+C') {
+                        addLog('  → Would open Customer Editor');
+                    }
+                }
+            }
+        });
+
+        addLog('Keyboard shortcuts test initialized. Try pressing Alt + [key] combinations.');
+        addLog('Note: Alt+N and Alt+P now use custom events instead of navigation.');
+    </script>
+</body>
+</html> 

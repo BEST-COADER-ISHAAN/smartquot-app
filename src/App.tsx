@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { supabase } from './lib/supabase';
 import Layout from './components/Layout/Layout';
@@ -15,6 +15,9 @@ import ScrollToTop from './components/ScrollToTop';
 import Profile from './pages/Profile';
 import QuotationStep3 from './pages/QuotationStep3';
 import { ThemeProvider } from './hooks/useTheme';
+import KeyboardShortcutsProvider from './components/KeyboardShortcutsProvider';
+import GlobalModals from './components/GlobalModals';
+import FloatingShortcutsButton from './components/FloatingShortcutsButton';
 
 function parseHashParams() {
   if (window.location.hash) {
@@ -29,6 +32,21 @@ function parseHashParams() {
   }
   return {};
 }
+
+// Component to handle dashboard refresh
+const DashboardWithRefresh = () => {
+  const location = useLocation();
+  const [refreshKey, setRefreshKey] = useState(Date.now());
+
+  useEffect(() => {
+    // Only force refresh when navigating to dashboard routes (not on every pathname change)
+    if (location.pathname === '/' || location.pathname === '/dashboard') {
+      setRefreshKey(Date.now());
+    }
+  }, [location.pathname]);
+
+  return <Dashboard key={refreshKey} />;
+};
 
 function App() {
   const { user, loading, isAuthenticated } = useAuth();
@@ -125,23 +143,29 @@ function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="quotations" element={<QuotationList />} />
-            <Route path="quotations/:id" element={<QuotationDetail />} />
-            <Route path="quotations/:id/step3" element={<QuotationStep3 />} />
-            <Route path="quotations/shared/:id" element={<QuotationSharedView />} />
-            <Route path="products" element={<ProductList />} />
-            <Route path="customers" element={<CustomerList />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="quotation-step3" element={<QuotationStep3 />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+        <KeyboardShortcutsProvider>
+          <GlobalModals>
+            <ScrollToTop />
+            <Routes>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<DashboardWithRefresh />} />
+                <Route path="dashboard" element={<DashboardWithRefresh />} />
+                <Route path="quotations" element={<QuotationList />} />
+                <Route path="quotations/new" element={<QuotationList />} />
+                <Route path="quotations/:id" element={<QuotationDetail />} />
+                <Route path="quotations/:id/step3" element={<QuotationStep3 />} />
+                <Route path=":company_slug/quotations/shared/:quotation_number" element={<QuotationSharedView />} />
+                <Route path="products" element={<ProductList />} />
+                <Route path="customers" element={<CustomerList />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="profile" element={<Profile />} />
+                <Route path="quotation-step3" element={<QuotationStep3 />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+            <FloatingShortcutsButton />
+          </GlobalModals>
+        </KeyboardShortcutsProvider>
       </BrowserRouter>
     </ThemeProvider>
   );

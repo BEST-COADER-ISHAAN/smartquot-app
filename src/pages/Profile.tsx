@@ -1,26 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { User, Mail, Phone, MapPin, Building, CreditCard, Lock, Save, Edit, X } from 'lucide-react';
+import { getUserSettings, upsertUserSettings } from '../lib/api';
 
 const Profile: React.FC = () => {
   const { user, session, loading, isAuthenticated } = useAuth();
   const [editing, setEditing] = useState(false);
   const [profile, setProfile] = useState({
-    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'SmartQuot' : 'SmartQuot',
-    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '22AAAAA0000A1Z5' : '22AAAAA0000A1Z5',
-    address: typeof window !== 'undefined' ? localStorage.getItem('company_address') || '123, Main Street, City, State, 123456' : '123, Main Street, City, State, 123456',
+    companyName: 'SmartQuot',
+    gstNo: '22AAAAA0000A1Z5',
+    address: '123, Main Street, City, State, 123456',
     logo: '',
     subscription: 'Pro Plan (valid till 2025-12-31)',
-    phone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-1234567890' : '+91-1234567890',
+    phone: '+91-1234567890',
+    email: '',
+  });
+  const [quotationDetails, setQuotationDetails] = useState({
+    includeCompanyName: true,
+    includeAddress: true,
+    includePhone: true,
+    includeEmail: true,
+    includeGst: true,
+    includeLogo: true,
   });
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   const [logoPreview, setLogoPreview] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // Load settings from Supabase (and migrate from localStorage if needed)
+  useEffect(() => {
+    const loadAndMigrateProfile = async () => {
+      if (!user) return;
+      try {
+        let settings = await getUserSettings(user.id);
+        // If no settings in Supabase, migrate from localStorage if present
+        if (!settings) {
+          const localProfile = {
+            companyName: localStorage.getItem('company_name') || 'SmartQuot',
+            gstNo: localStorage.getItem('gst_no') || '22AAAAA0000A1Z5',
+            address: localStorage.getItem('company_address') || '123, Main Street, City, State, 123456',
+            logo: '',
+            phone: localStorage.getItem('company_phone') || '+91-1234567890',
+            email: localStorage.getItem('company_email') || user.email || 'info@yourcompany.com',
+          };
+          const localQuotationDetails = {
+            includeCompanyName: localStorage.getItem('include_company_name') !== 'false',
+            includeAddress: localStorage.getItem('include_address') !== 'false',
+            includePhone: localStorage.getItem('include_phone') !== 'false',
+            includeEmail: localStorage.getItem('include_email') !== 'false',
+            includeGst: localStorage.getItem('include_gst') !== 'false',
+            includeLogo: localStorage.getItem('include_logo') !== 'false',
+          };
+          await upsertUserSettings(user.id, {
+            company_name: localProfile.companyName,
+            company_address: localProfile.address,
+            company_phone: localProfile.phone,
+            company_email: localProfile.email,
+            gst_no: localProfile.gstNo,
+            logo: localProfile.logo,
+            include_company_name: localQuotationDetails.includeCompanyName,
+            include_address: localQuotationDetails.includeAddress,
+            include_phone: localQuotationDetails.includePhone,
+            include_email: localQuotationDetails.includeEmail,
+            include_gst: localQuotationDetails.includeGst,
+            include_logo: localQuotationDetails.includeLogo,
+          });
+          // Remove from localStorage after migration
+          localStorage.removeItem('company_name');
+          localStorage.removeItem('company_address');
+          localStorage.removeItem('company_phone');
+          localStorage.removeItem('company_email');
+          localStorage.removeItem('gst_no');
+          localStorage.removeItem('logo');
+          localStorage.removeItem('include_company_name');
+          localStorage.removeItem('include_address');
+          localStorage.removeItem('include_phone');
+          localStorage.removeItem('include_email');
+          localStorage.removeItem('include_gst');
+          localStorage.removeItem('include_logo');
+          settings = await getUserSettings(user.id);
+        }
+        if (settings) {
+          setProfile({
+            companyName: settings.company_name || 'SmartQuot',
+            gstNo: settings.gst_no || '22AAAAA0000A1Z5',
+            address: settings.company_address || '123, Main Street, City, State, 123456',
+            logo: settings.logo || '',
+            subscription: 'Pro Plan (valid till 2025-12-31)',
+            phone: settings.company_phone || '+91-1234567890',
+            email: settings.company_email || user.email || 'info@yourcompany.com',
+          });
+          setQuotationDetails({
+            includeCompanyName: settings.include_company_name !== false,
+            includeAddress: settings.include_address !== false,
+            includePhone: settings.include_phone !== false,
+            includeEmail: settings.include_email !== false,
+            includeGst: settings.include_gst !== false,
+            includeLogo: settings.include_logo !== false,
+          });
+        }
+      } catch (error) {
+        console.error('Error loading user profile settings:', error);
+      }
+    };
+    loadAndMigrateProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProfile((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleQuotationDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setQuotationDetails((prev) => ({ ...prev, [name]: checked }));
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,16 +135,27 @@ const Profile: React.FC = () => {
     setPasswordMessage(null);
   };
 
-  const handleSave = () => {
-    // Save company details to localStorage for PDF export
-    localStorage.setItem('company_name', profile.companyName);
-    localStorage.setItem('company_address', profile.address);
-    localStorage.setItem('company_phone', profile.phone);
-    localStorage.setItem('company_email', user?.email || 'info@yourcompany.com');
-    localStorage.setItem('gst_no', profile.gstNo);
-    
-    setEditing(false);
-    // Save logic here - you can integrate with your backend
+  const handleSave = async () => {
+    if (!user) return;
+    try {
+      await upsertUserSettings(user.id, {
+        company_name: profile.companyName,
+        company_address: profile.address,
+        company_phone: profile.phone,
+        company_email: profile.email || user.email || 'info@yourcompany.com',
+        gst_no: profile.gstNo,
+        logo: profile.logo,
+        include_company_name: quotationDetails.includeCompanyName,
+        include_address: quotationDetails.includeAddress,
+        include_phone: quotationDetails.includePhone,
+        include_email: quotationDetails.includeEmail,
+        include_gst: quotationDetails.includeGst,
+        include_logo: quotationDetails.includeLogo,
+      });
+      setEditing(false);
+    } catch (error) {
+      console.error('Error saving user profile settings:', error);
+    }
   };
 
   const handlePasswordUpdate = async () => {
@@ -215,6 +321,89 @@ const Profile: React.FC = () => {
                 Subscription Details
               </label>
               <div className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{profile.subscription}</div>
+            </div>
+          </div>
+
+          {/* Quotation Details Preferences */}
+          <div className="border-t border-gray-200 pt-6 mb-8">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+              <Building className="w-5 h-5 mr-2" />
+              Quotation Details Preferences
+            </h3>
+            <p className="text-gray-600 mb-4">Select which company details to include in your quotations</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includeCompanyName"
+                  name="includeCompanyName"
+                  checked={quotationDetails.includeCompanyName}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includeCompanyName" className="text-gray-700">Include Company Name</label>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includeAddress"
+                  name="includeAddress"
+                  checked={quotationDetails.includeAddress}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includeAddress" className="text-gray-700">Include Address</label>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includePhone"
+                  name="includePhone"
+                  checked={quotationDetails.includePhone}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includePhone" className="text-gray-700">Include Phone Number</label>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includeEmail"
+                  name="includeEmail"
+                  checked={quotationDetails.includeEmail}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includeEmail" className="text-gray-700">Include Email</label>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includeGst"
+                  name="includeGst"
+                  checked={quotationDetails.includeGst}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includeGst" className="text-gray-700">Include GST Number</label>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="includeLogo"
+                  name="includeLogo"
+                  checked={quotationDetails.includeLogo}
+                  onChange={handleQuotationDetailsChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="includeLogo" className="text-gray-700">Include Company Logo</label>
+              </div>
             </div>
           </div>
 

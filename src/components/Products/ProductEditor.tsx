@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Package, DollarSign, Layers, Ruler, Image, Weight, Truck, Percent, Box } from 'lucide-react';
+import { Save, Package, IndianRupee, Layers, Ruler, Image, Weight, Truck, Percent, Box } from 'lucide-react';
 import { QuotationProduct } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { api } from '../../lib/api';
@@ -230,7 +230,7 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
                 Ex-Factory Price *
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="number"
                   value={formData.ex_factory_price}
@@ -248,7 +248,7 @@ const ProductEditor: React.FC<ProductEditorProps> = ({ product, onSave, onCancel
                 MRP per sqft *
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="number"
                   value={formData.mrp_per_sqft}

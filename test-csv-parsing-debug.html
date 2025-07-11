@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Parsing Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1e40af;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .test-button.success {
+            background: #10b981;
+        }
+        .test-button.success:hover {
+            background: #059669;
+        }
+        .test-button.danger {
+            background: #ef4444;
+        }
+        .test-button.danger:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 CSV Parsing Debug Test</h1>
+        
+        <div class="error">
+            <h3>Issue Identified!</h3>
+            <p>The Excel importer is parsing 1584 rows but filtering them all out, resulting in 0 valid rows. This suggests a problem with the CSV header mapping or field parsing.</p>
+        </div>
+
+        <div class="info">
+            <h3>Root Cause Analysis</h3>
+            <p>The issue is likely one of these:</p>
+            <ul>
+                <li><strong>Header Mismatch:</strong> CSV headers don't match expected field names</li>
+                <li><strong>Field Parsing:</strong> Name or size fields are not being parsed correctly</li>
+                <li><strong>CSV Format:</strong> CSV structure doesn't match expected format</li>
+                <li><strong>Encoding Issues:</strong> Special characters or encoding problems</li>
+            </ul>
+        </div>
+
+        <div class="debug-section">
+            <h3>1. CSV Header Analysis</h3>
+            <p>The importer expects these headers (case-insensitive):</p>
+            <div class="code-block">
+name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+            </div>
+            <p><strong>Check:</strong> Does your CSV have exactly these headers?</p>
+        </div>
+
+        <div class="debug-section">
+            <h3>2. Field Mapping Debug</h3>
+            <p>The importer is now logging:</p>
+            <ul>
+                <li>CSV headers found</li>
+                <li>Whether 'name' and 'size' headers exist</li>
+                <li>Each row's name and size values</li>
+                <li>Which rows are being filtered out and why</li>
+            </ul>
+        </div>
+
+        <div class="debug-section">
+            <h3>3. Common Issues & Solutions</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f9fafb;">
+                        <th style="border: 1px solid #e5e7eb; padding: 8px;">Issue</th>
+                        <th style="border: 1px solid #e5e7eb; padding: 8px;">Symptoms</th>
+                        <th style="border: 1px solid #e5e7eb; padding: 8px;">Solution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Wrong header names</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Headers don't include 'name' or 'size'</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Rename CSV headers to match template</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Empty name/size fields</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Rows have empty name or size values</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Fill in all name and size fields</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Extra spaces</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Headers or values have leading/trailing spaces</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Clean CSV data (now handled automatically)</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Wrong CSV format</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Commas in data, wrong delimiter</td>
+                        <td style="border: 1px solid #e5e7eb; padding: 8px;">Use proper CSV format with quotes if needed</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="debug-section">
+            <h3>4. Testing Steps</h3>
+            <ol>
+                <li><strong>Check Console Logs:</strong> Look for the new debug messages in browser console</li>
+                <li><strong>Verify Headers:</strong> Check if CSV headers include 'name' and 'size'</li>
+                <li><strong>Check Row Data:</strong> Look at the first few rows to see name/size values</li>
+                <li><strong>Identify Filtered Rows:</strong> See which rows are being filtered out and why</li>
+                <li><strong>Fix CSV:</strong> Correct any issues found in the analysis</li>
+            </ol>
+        </div>
+
+        <div class="debug-section">
+            <h3>5. Expected Console Output</h3>
+            <p>You should now see these debug messages:</p>
+            <div class="code-block">
+CSV Headers: ['name', 'size', 'collection', 'surface', ...]
+Looking for headers: name, size
+Headers include name: true
+Headers include size: true
+Row 1: {name: "SPACERA LUMINERA", size: "600X1200", ...}
+Filtering row: name="SPACERA LUMINERA", size="600X1200"
+Row 2: {name: "MARBLE DESIGN A", size: "24X48", ...}
+Filtering row: name="MARBLE DESIGN A", size="24X48"
+...
+Parsed rows: 1584
+            </div>
+        </div>
+
+        <div class="success">
+            <h3>Next Steps</h3>
+            <ol>
+                <li>Try uploading your CSV file again</li>
+                <li>Check the browser console (F12) for the new debug messages</li>
+                <li>Look for any rows that show "Row filtered out" messages</li>
+                <li>Identify why those rows are being filtered (empty name/size)</li>
+                <li>Fix your CSV file based on the findings</li>
+                <li>Try the import again</li>
+            </ol>
+        </div>
+
+        <div class="info">
+            <h3>Quick Fixes</h3>
+            <ul>
+                <li><strong>If headers are wrong:</strong> Rename your CSV headers to match the template exactly</li>
+                <li><strong>If fields are empty:</strong> Fill in all name and size fields in your CSV</li>
+                <li><strong>If format is wrong:</strong> Use the template as a guide for proper CSV format</li>
+                <li><strong>If encoding issues:</strong> Save your CSV as UTF-8 encoding</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test CSV parsing function
+        function testCSVParsing() {
+            const csvText = `name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+SPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,,32,2
+MARBLE DESIGN A,24X48,MARBLE,Polished,50,75,150,18,1.5,12.5,12.5,28,2.5`;
+            
+            const lines = csvText.split('\n').filter(line => line.trim());
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            
+            console.log('Test CSV Headers:', headers);
+            console.log('Headers include name:', headers.includes('name'));
+            console.log('Headers include size:', headers.includes('size'));
+            
+            const rows = lines.slice(1).map((line, lineIndex) => {
+                const values = line.split(',').map(v => v.trim());
+                const row = {};
+                headers.forEach((header, i) => {
+                    row[header] = values[i] || '';
+                });
+                console.log(`Test Row ${lineIndex + 1}:`, row);
+                return row;
+            }).filter(row => {
+                console.log(`Test Filtering: name="${row.name}", size="${row.size}"`);
+                const hasName = row.name && row.name.trim() !== '';
+                const hasSize = row.size && row.size.trim() !== '';
+                if (!hasName || !hasSize) {
+                    console.log(`Test Row filtered out: name=${hasName}, size=${hasSize}`);
+                }
+                return hasName && hasSize;
+            });
+            
+            console.log('Test Parsed rows:', rows.length);
+            alert(`Test completed! Check console for details. Parsed ${rows.length} rows.`);
+        }
+    </script>
+</body>
+</html> 

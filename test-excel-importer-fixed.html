@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Importer Fixed - Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        .test-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .test-button.success {
+            background: #10b981;
+        }
+        .test-button.success:hover {
+            background: #059669;
+        }
+        .test-button.warning {
+            background: #f59e0b;
+        }
+        .test-button.warning:hover {
+            background: #d97706;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px;
+        }
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Excel Importer Fixed</h1>
+        
+        <div class="success">
+            <h3>Issues Fixed!</h3>
+            <p>The Excel importer has been fixed with improved error handling, better logging, and enhanced validation.</p>
+        </div>
+
+        <div class="info">
+            <h3>What Was Fixed</h3>
+            <ul>
+                <li><strong>Enhanced Error Handling:</strong> Better try-catch blocks and error messages</li>
+                <li><strong>Improved Logging:</strong> Detailed console logs for debugging</li>
+                <li><strong>Better Validation:</strong> More robust field validation</li>
+                <li><strong>Reduced Batch Size:</strong> Smaller batches (10 instead of 50) for better error handling</li>
+                <li><strong>Enhanced Data Processing:</strong> Better field mapping and data cleaning</li>
+                <li><strong>User Feedback:</strong> Better error messages and progress indicators</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>1. CSV Template Test</h3>
+            <p>Test the improved CSV template with proper formatting:</p>
+            <div class="code-block">
+name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+SPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,,32,2
+            </div>
+            <button class="test-button success" onclick="downloadTestTemplate()">Download Test Template</button>
+        </div>
+
+        <div class="test-section">
+            <h3>2. Required Fields Validation</h3>
+            <p>The importer now validates these required fields:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Type</th>
+                        <th>Validation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>name</td>
+                        <td>string</td>
+                        <td>Required, non-empty</td>
+                    </tr>
+                    <tr>
+                        <td>size</td>
+                        <td>string</td>
+                        <td>Required, non-empty</td>
+                    </tr>
+                    <tr>
+                        <td>ex_factory_price</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>mrp_per_sqft</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>mrp_per_box</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>gst_percentage</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>insurance_percentage</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>actual_sqft_per_box</td>
+                        <td>number</td>
+                        <td>Required, > 0</td>
+                    </tr>
+                    <tr>
+                        <td>weight</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                    <tr>
+                        <td>freight</td>
+                        <td>number</td>
+                        <td>Required, >= 0</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h3>3. Enhanced Error Handling</h3>
+            <p>The importer now provides better error handling:</p>
+            <ul>
+                <li><strong>File Reading:</strong> Try-catch for file upload errors</li>
+                <li><strong>CSV Parsing:</strong> Error handling for malformed CSV</li>
+                <li><strong>Authentication:</strong> Checks for valid user session</li>
+                <li><strong>API Calls:</strong> Individual batch error handling</li>
+                <li><strong>Validation:</strong> Detailed field validation with specific error messages</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>4. Improved Logging</h3>
+            <p>Enhanced console logging for debugging:</p>
+            <div class="code-block">
+// File upload logging
+console.log('Selected file:', fileName, fileSize);
+console.log('File content length:', contentLength);
+console.log('Parsed rows:', rowCount);
+
+// CSV parsing logging
+console.log('CSV Headers:', headers);
+console.log('Row 1:', rowData);
+
+// Import process logging
+console.log('Valid rows to import:', validCount);
+console.log('Batch to import:', batchData);
+console.log('API response:', response);
+console.log('Import complete:', result);
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. Data Processing Improvements</h3>
+            <p>Better data processing and field mapping:</p>
+            <ul>
+                <li><strong>Field Trimming:</strong> Removes whitespace from text fields</li>
+                <li><strong>Default Values:</strong> Handles optional fields with defaults</li>
+                <li><strong>Type Conversion:</strong> Proper number parsing with validation</li>
+                <li><strong>Required Field Mapping:</strong> Ensures all required fields are present</li>
+                <li><strong>User ID Assignment:</strong> Properly assigns user_id and created_by</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h3>Testing Instructions</h3>
+            <ol>
+                <li><strong>Download Template:</strong> Use the "Download CSV Template" button</li>
+                <li><strong>Create Test Data:</strong> Add a few test products to the CSV</li>
+                <li><strong>Upload File:</strong> Use the file upload in the Excel Importer</li>
+                <li><strong>Check Preview:</strong> Verify data is parsed correctly</li>
+                <li><strong>Review Validation:</strong> Check for any validation errors</li>
+                <li><strong>Import Products:</strong> Click "Import Products" button</li>
+                <li><strong>Monitor Console:</strong> Check browser console (F12) for detailed logs</li>
+                <li><strong>Verify Results:</strong> Check the import results and any error messages</li>
+            </ol>
+        </div>
+
+        <div class="info">
+            <h3>Common Issues & Solutions</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Issue</th>
+                        <th>Solution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Authentication Error</td>
+                        <td>Ensure user is logged in and session is valid</td>
+                    </tr>
+                    <tr>
+                        <td>CSV Parsing Error</td>
+                        <td>Check CSV format matches template exactly</td>
+                    </tr>
+                    <tr>
+                        <td>Validation Errors</td>
+                        <td>Ensure all required fields are present and valid</td>
+                    </tr>
+                    <tr>
+                        <td>API Connection Error</td>
+                        <td>Check network connection and Edge Function status</td>
+                    </tr>
+                    <tr>
+                        <td>Subscription Limit</td>
+                        <td>Free plan has 10 product limit - upgrade for more</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="success">
+            <h3>Benefits of the Fix</h3>
+            <ul>
+                <li><strong>Better Debugging:</strong> Detailed console logs help identify issues</li>
+                <li><strong>Improved UX:</strong> Better error messages and progress feedback</li>
+                <li><strong>Robust Validation:</strong> Comprehensive field validation prevents errors</li>
+                <li><strong>Reliable Import:</strong> Smaller batches and better error handling</li>
+                <li><strong>Clear Feedback:</strong> Users know exactly what went wrong</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function downloadTestTemplate() {
+            const csvContent = `name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+SPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,,32,2
+MARBLE DESIGN A,24X48,MARBLE,Polished,50,75,150,18,1.5,12.5,12.5,28,2.5
+GRANITE STONE,30X60,GRANITE,Matte,60,85,180,18,2,18.0,18.0,35,3.0`;
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'test_products_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            alert('Test template downloaded! Use this to test the Excel importer.');
+        }
+    </script>
+</body>
+</html> 

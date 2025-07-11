@@ -1,20 +1,19 @@
-import React, { useState, useRef } from 'react';
-import { X, Download, Share2, ExternalLink, FileText, Link as LinkIcon, Copy, Check, Eye, Globe, QrCode } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Share2, ExternalLink, Link as LinkIcon, Copy, Check, Eye, Globe, QrCode, Download, FileText, Loader } from 'lucide-react';
 import { Quotation } from '../../types';
-import PdfStandardTemplate from './templates/PdfStandardTemplate';
-import PdfModernTemplate from './templates/PdfModernTemplate';
-import PdfMinimalTemplate from './templates/PdfMinimalTemplate';
-import PdfDetailedTemplate from './templates/PdfDetailedTemplate';
 import LinkModernTemplate from './templates/LinkModernTemplate';
 import LinkMobileTemplate from './templates/LinkMobileTemplate';
 import LinkPrintTemplate from './templates/LinkPrintTemplate';
+import PdfTemplate from './templates/PdfTemplate';
+import { generatePDF, generatePDFBlob } from '../../lib/pdfExport';
 import OnlineQuotationComponent from '@/components/ui/OnlineQuotationComponent';
-import { exportComponentAsPDF } from '@/lib/exportPdf';
-import ReactDOMServer from 'react-dom/server';
+import { usePreferredSizeUnit } from '../../hooks/usePreferredSizeUnit';
+import { formatSizeForDisplay } from '../../lib/sizeUtils';
+import { getCompanyDetailsFromQuotationAsync, getCurrentCompanySlugAsync } from '../../lib/companyUtils';
 
 interface QuotationExportPreviewProps {
   quotation: Quotation;
-  exportType: 'pdf' | 'link';
+  exportType: 'pdf' | 'link' | 'both';
   template: string;
   onClose: () => void;
 }
@@ -28,183 +27,68 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const pdfContentRef = useRef<HTMLDivElement>(null);
+  const { preferredSizeUnit } = usePreferredSizeUnit();
+  const [formattedSizeMap, setFormattedSizeMap] = useState<Record<string, string>>({});
+  const [sizeLoading, setSizeLoading] = useState(true);
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyLoading, setCompanyLoading] = useState(true);
+  const [companyError, setCompanyError] = useState<string | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [companySlug, setCompanySlug] = useState<string | null>(null);
 
-  // Use quotation_number instead of ID for the URL
-  const shareUrl = `${window.location.origin}/quotations/shared/${quotation.quotation_number}`;
-
-  const handleDownload = async () => {
-    setIsGeneratingPDF(true);
-    try {
-      if (exportType === 'pdf') {
-        // Render the selected template to HTML string
-        let html = '';
-        if (template === 'standard') {
-          html = ReactDOMServer.renderToStaticMarkup(
-            <PdfStandardTemplate quotation={quotation} />
-          );
-        } else if (template === 'modern') {
-          html = ReactDOMServer.renderToStaticMarkup(
-            <PdfModernTemplate quotation={quotation} />
-          );
-        } else if (template === 'minimal') {
-          html = ReactDOMServer.renderToStaticMarkup(
-            <PdfMinimalTemplate quotation={quotation} />
-          );
-        } else if (template === 'detailed') {
-          html = ReactDOMServer.renderToStaticMarkup(
-            <PdfDetailedTemplate quotation={quotation} />
-          );
-        } else {
-          html = ReactDOMServer.renderToStaticMarkup(
-            <PdfStandardTemplate quotation={quotation} />
-          );
-        }
-        // Wrap in a full HTML document with Tailwind CDN
-        const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset='utf-8'>
-  <title>Quotation PDF</title>
-  <link href='https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css' rel='stylesheet'>
-  <style>
-    /* Fallback styles in case Tailwind doesn't load */
-    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    .header { text-align: center; margin-bottom: 30px; }
-    .section { margin-bottom: 20px; }
-    .table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    .table th { background-color: #f8f9fa; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    ${html}
-  </div>
-</body>
-</html>`;
-
-        console.log('HTML being sent to Netlify function:');
-        console.log('HTML length:', fullHtml.length);
-        console.log('HTML preview:', fullHtml.substring(0, 500));
-        
-        // Call Netlify function
-        const response = await fetch('/.netlify/functions/generate-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html: fullHtml })
+  React.useEffect(() => {
+    async function computeSizes() {
+      setSizeLoading(true);
+      const uniqueSizes = new Set<string>();
+      quotation.rooms?.forEach(room => {
+        room.items?.forEach(item => {
+          if (item?.product?.size) uniqueSizes.add(item.product.size);
         });
-        
-        console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Netlify function error:', errorText);
-          throw new Error(`PDF generation failed: ${response.status} - ${errorText}`);
-        }
-        
-        // Check if response is actually base64 or binary
-        const responseText = await response.text();
-        console.log('Response text length:', responseText.length);
-        console.log('Response preview:', responseText.substring(0, 100));
-        
-        // Check if response is an error JSON
-        try {
-          const errorCheck = JSON.parse(responseText);
-          if (errorCheck.error) {
-            console.error('Netlify function returned error:', errorCheck);
-            throw new Error(`PDF generation failed: ${errorCheck.error}`);
-          }
-        } catch (e) {
-          // Not JSON, continue with PDF processing
-        }
-        
-        let pdfData;
-        
-        // Check if it looks like base64
-        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-        const cleanText = responseText.replace(/\s/g, '');
-        const isBase64 = base64Regex.test(cleanText);
-        
-        console.log('Is base64 format:', isBase64);
-        
-        if (isBase64) {
-            // Decode base64 to binary
-            const binaryString = atob(cleanText);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            pdfData = bytes.buffer;
-            console.log('Decoded PDF size:', pdfData.byteLength);
-        } else {
-            // It's binary data, convert text back to binary
-            const bytes = new Uint8Array(responseText.length);
-            for (let i = 0; i < responseText.length; i++) {
-                bytes[i] = responseText.charCodeAt(i);
-            }
-            pdfData = bytes.buffer;
-            console.log('Binary PDF size:', pdfData.byteLength);
-        }
-        
-        // Debug: Check what we're actually getting
-        const pdfHeader = new Uint8Array(pdfData.slice(0, 8));
-        const pdfHeaderText = String.fromCharCode.apply(null, Array.from(pdfHeader));
-        console.log('PDF header:', pdfHeaderText);
-        console.log('PDF header bytes:', Array.from(pdfHeader));
-        console.log('First 20 bytes:', Array.from(new Uint8Array(pdfData.slice(0, 20))));
-        
-        // Check if PDF is valid
-        if (!pdfHeaderText.startsWith('%PDF')) {
-          console.error('Invalid PDF header:', pdfHeaderText);
-          throw new Error('Generated PDF is not valid. Please try again.');
-        }
-        
-        // Create blob from PDF data
-        const blob = new Blob([pdfData], { type: 'application/pdf' });
-        console.log('Blob size:', blob.size);
-        console.log('Blob type:', blob.type);
-        
-        if (blob.size === 0) {
-          throw new Error('Generated PDF is empty. Please try again.');
-        }
-        
-        // Ensure blob is fully ready before creating URL
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Create blob URL only after ensuring blob is ready
-        const url = window.URL.createObjectURL(blob);
-        
-        // Use a more reliable download method
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${quotation.quotation_number}-quotation.pdf`;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        
-        // Trigger download
-        a.click();
-        
-        // Remove the element immediately
-        document.body.removeChild(a);
-        
-        // Clean up the blob URL after a longer delay to ensure download completes
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url);
-        }, 5000);
-      } else {
-        if (!pdfContentRef.current) return;
-        await exportComponentAsPDF(pdfContentRef.current, `${quotation.quotation_number}-quotation.pdf`);
+      });
+      const map: Record<string, string> = {};
+      for (const size of uniqueSizes) {
+        map[size] = await formatSizeForDisplay(size, preferredSizeUnit);
       }
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
-    } finally {
-      setIsGeneratingPDF(false);
+      setFormattedSizeMap(map);
+      setSizeLoading(false);
     }
-  };
+    computeSizes();
+  }, [quotation, preferredSizeUnit]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    setCompanyLoading(true);
+    setCompanyError(null);
+    getCompanyDetailsFromQuotationAsync(quotation)
+      .then(details => {
+        if (mounted) {
+          setCompanyProfile(details);
+          setCompanyLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (mounted) {
+          setCompanyError('Could not load company profile. Please check your login or profile settings.');
+          setCompanyProfile(null);
+          setCompanyLoading(false);
+        }
+      });
+    return () => { mounted = false; };
+  }, [quotation]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const slug = await getCurrentCompanySlugAsync();
+      if (mounted) setCompanySlug(slug);
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Use companySlug and quotation_number for the URL
+  const shareUrl = companySlug
+    ? `${window.location.origin}/${companySlug}/quotations/shared/${quotation.quotation_number}`
+    : '';
 
   const handleCopyLink = async () => {
     try {
@@ -224,13 +108,64 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
     }
   };
 
-  const handleShare = () => {
+  const handleShare = async (shareType: 'pdf' | 'link' = 'link') => {
+    
     if (navigator.share) {
-      navigator.share({
-        title: `Quotation ${quotation.quotation_number}`,
-        text: `View quotation ${quotation.quotation_number}`,
-        url: shareUrl,
-      });
+      if (shareType === 'pdf') {
+        // For PDF sharing, generate the PDF first and then share it
+        try {
+          setIsGeneratingPDF(true);
+          const pdfBlob = await generatePDFBlob(quotation);
+          
+          // Create a file from the blob
+          const pdfFile = new File([pdfBlob], `quotation-${quotation.quotation_number}.pdf`, {
+            type: 'application/pdf'
+          });
+          
+          // Check if file sharing is supported
+          const canShareFiles = navigator.canShare && navigator.canShare({ files: [pdfFile] });
+          
+          if (canShareFiles) {
+            await navigator.share({
+              title: `Quotation ${quotation.quotation_number} - PDF`,
+              text: `Quotation ${quotation.quotation_number} PDF document`,
+              files: [pdfFile]
+            });
+          } else {
+            try {
+              // Try to share the file even if canShare returns false
+              await navigator.share({
+                title: `Quotation ${quotation.quotation_number} - PDF`,
+                text: `Quotation ${quotation.quotation_number} PDF document`,
+                files: [pdfFile]
+              });
+            } catch (shareError) {
+              // Fallback to link sharing if file sharing is not supported
+              navigator.share({
+                title: `Quotation ${quotation.quotation_number} - PDF`,
+                text: `Quotation ${quotation.quotation_number} PDF document`,
+                url: shareUrl,
+              });
+            }
+          }
+        } catch (error) {
+          // Fallback to link sharing
+          navigator.share({
+            title: `Quotation ${quotation.quotation_number} - PDF`,
+            text: `Quotation ${quotation.quotation_number} PDF document`,
+            url: shareUrl,
+          });
+        } finally {
+          setIsGeneratingPDF(false);
+        }
+      } else {
+        // For link sharing
+        navigator.share({
+          title: `Quotation ${quotation.quotation_number}`,
+          text: `View quotation ${quotation.quotation_number}`,
+          url: shareUrl,
+        });
+      }
     } else {
       handleCopyLink();
     }
@@ -244,19 +179,52 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}`;
   };
 
+  const handleDownloadPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      await generatePDF(quotation);
+    } catch (error) {
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handlePreparePDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const pdfBlob = await generatePDFBlob(quotation);
+      setPdfFile(new File([pdfBlob], `quotation-${quotation.quotation_number}.pdf`, { type: 'application/pdf' }));
+    } catch (error) {
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const handleSharePDF = async () => {
+    if (!pdfFile) return;
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      try {
+        await navigator.share({
+          title: `Quotation ${quotation.quotation_number} - PDF`,
+          text: `Quotation ${quotation.quotation_number} PDF document`,
+          files: [pdfFile],
+        });
+      } catch (error) {
+        alert('Sharing was cancelled or failed.');
+      }
+    } else {
+      alert('PDF file sharing is not supported on this device/browser.');
+    }
+  };
+
   const renderTemplate = () => {
     if (exportType === 'pdf') {
-      switch (template) {
-        case 'modern':
-          return <PdfModernTemplate quotation={quotation} />;
-        case 'minimal':
-          return <PdfMinimalTemplate quotation={quotation} />;
-        case 'detailed':
-          return <PdfDetailedTemplate quotation={quotation} />;
-        case 'standard':
-        default:
-          return <PdfStandardTemplate quotation={quotation} />;
-      }
+      if (sizeLoading || companyLoading) return <div className="p-8 text-center text-gray-500">Loading...</div>;
+      if (companyError) return <div className="p-8 text-center text-red-600">{companyError}</div>;
+      if (!companyProfile) return <div className="p-8 text-center text-red-600">No company profile found. Please update your profile settings.</div>;
+      return <PdfTemplate quotation={quotation} formattedSizeMap={formattedSizeMap} companyProfile={companyProfile} preferredSizeUnit={preferredSizeUnit} />;
     } else {
       switch (template) {
         case 'mobile':
@@ -272,213 +240,233 @@ const QuotationExportPreview: React.FC<QuotationExportPreviewProps> = ({
 
   const getTemplateDisplayName = () => {
     if (exportType === 'pdf') {
-      switch (template) {
-        case 'modern':
-          return 'Modern PDF Template';
-        case 'minimal':
-          return 'Minimal Template';
-        case 'detailed':
-          return 'Detailed Template';
-        case 'standard':
-        default:
-          return 'Professional PDF Template';
-      }
+      return 'PDF Template';
     } else {
       switch (template) {
         case 'mobile':
-          return 'Mobile Optimized';
+          return 'Mobile Template';
         case 'print':
-          return 'Print Friendly';
+          return 'Print Template';
         case 'modern':
         default:
-          return 'Modern Web View';
+          return 'Modern Template';
       }
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" style={{ fontFamily: "Oxygen, Noto Sans, Open Sans, Arial, sans-serif" }}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[92vh] overflow-hidden border border-gray-200">
+        {/* Gradient Header Bar */}
+        <div className="h-2 w-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500" />
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-xl">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 rounded-full p-2">
+        <div className="flex items-center justify-between px-8 py-6 border-b bg-gradient-to-r from-sky-50 to-blue-50">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-center h-12 w-12 rounded-full bg-sky-100 shadow">
               {exportType === 'pdf' ? (
-                <FileText className="w-6 h-6 text-white" />
+                <FileText className="h-7 w-7 text-sky-700" />
               ) : (
-                <LinkIcon className="w-6 h-6 text-white" />
+                <LinkIcon className="h-7 w-7 text-blue-600" />
               )}
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {exportType === 'pdf' ? 'PDF Preview' : 'Link Preview & Sharing'}
+              <h2 className="text-2xl font-bold text-gray-800 tracking-tight flex items-center gap-2">
+                {exportType === 'pdf' ? 'Export PDF' : 'Share Quotation'}
+                <span className="ml-2 px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs font-semibold uppercase tracking-wider border border-sky-200">
+                  {getTemplateDisplayName()}
+                </span>
               </h2>
-              <p className="text-gray-600">
-                {getTemplateDisplayName()} • {quotation.quotation_number}
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Quotation #{quotation.quotation_number}</p>
             </div>
           </div>
-          
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-2 hover:bg-white rounded-full"
-            title="Close Preview"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+            title="Close"
           >
-            <X className="w-6 h-6" />
+            <X className="h-6 w-6 text-gray-500" />
           </button>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-hidden flex">
-          {/* Link Sharing Panel (only for link exports) */}
-          {exportType === 'link' && (
-            <div className="w-80 bg-gray-50 border-r border-gray-200 p-6 overflow-y-auto">
-              <h3 className="text-lg font-semibold text-gray-800 mb-6 flex items-center space-x-2">
-                <Share2 className="w-5 h-5" />
-                <span>Share This Quotation</span>
-              </h3>
+        {/* Content */}
+        <div className="flex flex-col lg:flex-row h-[calc(92vh-90px)]">
+          {/* Preview */}
+          <div className="flex-1 px-8 py-6 overflow-y-auto bg-gradient-to-br from-white to-blue-50">
+            <div className="bg-white rounded-xl border border-sky-100 shadow p-6 mb-4">
+              <div className="flex items-center mb-4">
+                <span className="inline-block px-3 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-semibold mr-2 border border-sky-200">Preview</span>
+              </div>
+              <div className="bg-gray-50 rounded-lg border p-4 shadow-inner">
+                {renderTemplate()}
+              </div>
+            </div>
+          </div>
 
-              {/* Share URL */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Shareable Link
-                </label>
-                <div className="flex items-center space-x-2">
-                  <div className="flex-1 relative">
+          {/* Sidebar */}
+          <div className="w-full lg:w-96 px-8 py-6 border-l bg-gradient-to-b from-sky-50 to-white flex flex-col justify-between">
+            <div>
+              <h3 className="font-semibold text-lg text-sky-800 mb-6">
+                {exportType === 'pdf' ? 'Export Options' : 'Share Options'}
+              </h3>
+              {/* URL Display - Only for link exports */}
+              {exportType !== 'pdf' && (
+                <div className="mb-6">
+                  <label className="block text-xs font-medium text-gray-600 mb-2">
+                    Share URL
+                  </label>
+                  <div className="flex rounded-lg shadow-sm overflow-hidden border border-gray-200">
                     <input
                       type="text"
                       value={shareUrl}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                      className="flex-1 px-3 py-2 text-xs bg-white focus:outline-none"
                     />
+                    <button
+                      onClick={handleCopyLink}
+                      className="px-3 py-2 bg-sky-600 text-white hover:bg-sky-700 transition-colors text-xs font-semibold"
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleCopyLink}
-                    className={`px-3 py-2 rounded-lg transition-all duration-200 ${
-                      copied 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                    title="Copy Link"
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </button>
                 </div>
-                {copied && (
-                  <p className="text-green-600 text-sm mt-1">Link copied to clipboard!</p>
-                )}
-              </div>
+              )}
 
-              {/* Quick Actions */}
+              {/* Action Buttons */}
               <div className="space-y-3 mb-6">
-                <button
-                  onClick={handleOpenLink}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open in New Tab</span>
-                </button>
-
-                <button
-                  onClick={handleShare}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span>Share via...</span>
-                </button>
-
-                <button
-                  onClick={() => setShowQR(!showQR)}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>{showQR ? 'Hide' : 'Show'} QR Code</span>
-                </button>
+                {exportType === 'pdf' ? (
+                  <>
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isGeneratingPDF}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-sky-600 to-blue-600 text-white rounded-lg shadow hover:from-sky-700 hover:to-blue-700 transition-colors disabled:opacity-50 text-base font-semibold"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span>{isGeneratingPDF ? 'Generating...' : 'Download PDF'}</span>
+                    </button>
+                    {!pdfFile ? (
+                      <button
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                        onClick={handlePreparePDF}
+                        disabled={isGeneratingPDF}
+                      >
+                        {isGeneratingPDF ? <Loader className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                        {isGeneratingPDF ? 'Preparing PDF...' : 'Prepare PDF for Sharing'}
+                      </button>
+                    ) : (
+                      <button
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition"
+                        onClick={handleSharePDF}
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Share PDF
+                      </button>
+                    )}
+                  </>
+                ) : exportType === 'link' ? (
+                  <>
+                    <button
+                      onClick={() => handleShare('link')}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-sky-500 text-white rounded-lg shadow hover:from-blue-700 hover:to-sky-600 transition-colors text-base font-semibold"
+                    >
+                      <Share2 className="h-5 w-5" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      onClick={handleOpenLink}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-gray-600 to-gray-800 text-white rounded-lg shadow hover:from-gray-700 hover:to-gray-900 transition-colors text-base font-semibold"
+                    >
+                      <ExternalLink className="h-5 w-5" />
+                      <span>Open Link</span>
+                    </button>
+                    <button
+                      onClick={() => setShowQR(!showQR)}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg shadow hover:from-green-600 hover:to-emerald-700 transition-colors text-base font-semibold"
+                    >
+                      <QrCode className="h-5 w-5" />
+                      <span>{showQR ? 'Hide' : 'Show'} QR Code</span>
+                    </button>
+                  </>
+                ) : (
+                  // exportType === 'both'
+                  <>
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={isGeneratingPDF}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-sky-600 to-blue-600 text-white rounded-lg shadow hover:from-sky-700 hover:to-blue-700 transition-colors disabled:opacity-50 text-base font-semibold"
+                    >
+                      <Download className="h-5 w-5" />
+                      <span>{isGeneratingPDF ? 'Generating...' : 'Download PDF'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleShare('pdf')}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-sky-500 text-white rounded-lg shadow hover:from-blue-700 hover:to-sky-600 transition-colors text-base font-semibold"
+                    >
+                      <Share2 className="h-5 w-5" />
+                      <span>Share PDF</span>
+                    </button>
+                    <button
+                      onClick={() => handleShare('link')}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg shadow hover:from-green-700 hover:to-emerald-700 transition-colors text-base font-semibold"
+                    >
+                      <Share2 className="h-5 w-5" />
+                      <span>Share Link</span>
+                    </button>
+                    <button
+                      onClick={handleOpenLink}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-gray-600 to-gray-800 text-white rounded-lg shadow hover:from-gray-700 hover:to-gray-900 transition-colors text-base font-semibold"
+                    >
+                      <ExternalLink className="h-5 w-5" />
+                      <span>Open Link</span>
+                    </button>
+                    <button
+                      onClick={() => setShowQR(!showQR)}
+                      className="w-full flex items-center justify-center space-x-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg shadow hover:from-purple-600 hover:to-indigo-700 transition-colors text-base font-semibold"
+                    >
+                      <QrCode className="h-5 w-5" />
+                      <span>{showQR ? 'Hide' : 'Show'} QR Code</span>
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* QR Code */}
               {showQR && (
-                <div className="mb-6 text-center">
-                  <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block">
-                    <img 
-                      src={generateQRCode()} 
-                      alt="QR Code for quotation link"
-                      className="w-32 h-32"
-                    />
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Scan to view quotation on mobile
+                <div className="mt-4 p-4 bg-white rounded-xl border border-gray-200 shadow flex flex-col items-center">
+                  <h4 className="text-xs font-semibold text-gray-700 mb-2">QR Code</h4>
+                  <img 
+                    src={generateQRCode()} 
+                    alt="QR Code"
+                    className="w-32 h-32 mb-2"
+                  />
+                  <p className="text-xs text-gray-500 text-center">
+                    Scan to open the quotation
                   </p>
                 </div>
               )}
             </div>
-          )}
 
-          {/* Preview Content */}
-          <div className="flex-1 overflow-auto bg-gray-100">
-            <div className="min-h-full p-4" style={{ overflowX: 'auto' }}>
-              <div
-                ref={pdfContentRef}
-                style={{
-                  width: '1200px', // Design width
-                  background: '#fff',
-                  margin: '0 auto',
-                  color: '#222',
-                  boxShadow: 'none',
-                  border: 'none',
-                  position: 'relative',
-                  display: 'block',
-                }}
-                className="pdf-export-content"
-              >
-              {renderTemplate()}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              {exportType === 'pdf' 
-                ? `Preview of PDF export using ${getTemplateDisplayName().toLowerCase()}`
-                : `Interactive web link ready for sharing • ${shareUrl}`
-              }
-            </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-              >
-                Close
-              </button>
-              {exportType === 'pdf' ? (
-                <button
-                  onClick={handleDownload}
-                  disabled={isGeneratingPDF}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isGeneratingPDF ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
-                  <span>{isGeneratingPDF ? 'Generating...' : 'Download PDF'}</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleCopyLink}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                    copied 
-                      ? 'bg-green-600 text-white' 
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{copied ? 'Copied!' : 'Copy Link'}</span>
-                </button>
-              )}
+            {/* Info */}
+            <div className={`mt-8 p-4 rounded-xl border shadow-inner ${exportType === 'pdf' ? 'bg-sky-50 border-sky-100' : 'bg-blue-50 border-blue-100'}`}>
+              <h4 className={`text-xs font-bold mb-2 ${exportType === 'pdf' ? 'text-sky-800' : 'text-blue-800'}`}>
+                {exportType === 'pdf' ? 'PDF Export' : 'How it works'}
+              </h4>
+              <ul className={`text-xs space-y-1 ${exportType === 'pdf' ? 'text-sky-700' : 'text-blue-700'}`}>
+                {exportType === 'pdf' ? (
+                  <>
+                    <li>• Generate a professional PDF</li>
+                    <li>• Perfect for printing and sharing</li>
+                    <li>• Includes all quotation details</li>
+                    <li>• High-quality formatting</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• Share the link with your customers</li>
+                    <li>• They can view the quotation online</li>
+                    <li>• No PDF download required</li>
+                    <li>• Works on all devices</li>
+                  </>
+                )}
+              </ul>
             </div>
           </div>
         </div>

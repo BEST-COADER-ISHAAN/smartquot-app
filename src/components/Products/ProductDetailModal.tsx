@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { X, Package, Ruler, Layers, DollarSign, Percent, Image as ImageIcon, Weight, Truck, Calculator, Edit3, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Package, Ruler, Layers, IndianRupee, Percent, Image as ImageIcon, Weight, Truck, Calculator, Edit3, Save } from 'lucide-react';
 import { QuotationProduct } from '../../types';
 import { getImageUrl } from '../../lib/storage';
 import { supabase } from '../../lib/supabase';
 import { supabaseAdmin } from '../../lib/supabaseAdmin';
+import { formatSizeForDisplay } from '../../lib/sizeUtils';
+import { getBillingTypeForSize, formatBillingDisplay, formatPriceDisplay, getSqftValue, getPriceValue, getFreightValue, getColumnHeader } from '../../lib/billingUtils';
+import { useAuth } from '../../hooks/useAuth';
+import { usePreferredSizeUnit } from '../../hooks/usePreferredSizeUnit';
 
 interface ProductDetailModalProps {
   product: QuotationProduct;
@@ -14,25 +18,99 @@ interface ProductDetailModalProps {
 const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose, onUpdate }) => {
   const [discount, setDiscount] = useState(0);
   const [companyDiscount, setCompanyDiscount] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(0);
   const [editingFreight, setEditingFreight] = useState(false);
   const [freightValue, setFreightValue] = useState(product.freight);
   const [savingFreight, setSavingFreight] = useState(false);
+  const [billedSqftPerBox, setBilledSqftPerBox] = useState(product.billed_sqft_per_box);
+  const [billingType, setBillingType] = useState<'per_sqft' | 'per_piece'>('per_sqft');
+  const [billingTypeLoading, setBillingTypeLoading] = useState(false);
+  const [formattedSize, setFormattedSize] = useState<string>('');
+
+  const { user } = useAuth();
+  const { preferredSizeUnit } = usePreferredSizeUnit();
+
+  const getDiscounts = async (userId: string, size: string) => {
+    const { data, error } = await supabase
+      .from('discounts')
+      .select('customer_discount, company_discount')
+      .eq('user_id', userId)
+      .eq('size', size)
+      .single();
+    if (error || !data) return { customer: 0, company: 0 };
+    return {
+      customer: data.customer_discount || 0,
+      company: data.company_discount || 0,
+    };
+  };
+
+  // In useEffect, fetch discounts from Supabase
+  React.useEffect(() => {
+    const fetchDiscounts = async () => {
+      if (!product.size || !product.mrp_per_sqft || !user?.id) return;
+      const { customer, company } = await getDiscounts(user.id, product.size);
+      setDiscount(customer);
+      setCompanyDiscount(company);
+      setFinalPrice(product.mrp_per_sqft * (1 - customer / 100));
+    };
+    fetchDiscounts();
+    // Load billed sqft from freight settings
+    loadBilledSqftFromFreightSettings();
+  }, [product.size, product.mrp_per_sqft, user?.id]);
+
+  useEffect(() => {
+    const fetchBillingType = async () => {
+      setBillingTypeLoading(true);
+      if (product.size) {
+        const type = await getBillingTypeForSize(user?.id, product.size);
+        setBillingType(type);
+      }
+      setBillingTypeLoading(false);
+    };
+    fetchBillingType();
+  }, [product.size]);
+
+  useEffect(() => {
+    async function fetchFormattedSize() {
+      setFormattedSize(await formatSizeForDisplay(product.size, preferredSizeUnit));
+    }
+    if (product.size) fetchFormattedSize();
+  }, [product.size, preferredSizeUnit]);
+
+  const loadBilledSqftFromFreightSettings = async () => {
+    try {
+      const { data: freightData, error } = await supabaseAdmin
+        .from('products')
+        .select('billed_sqft_per_box')
+        .eq('size', product.size)
+        .eq('is_archived', false)
+        .limit(1);
+
+      if (!error && freightData && freightData.length > 0) {
+        setBilledSqftPerBox(freightData[0].billed_sqft_per_box || product.billed_sqft_per_box);
+      }
+    } catch (error) {
+      console.error('Error loading freight settings:', error);
+    }
+  };
 
   const imageUrl = product.image_url || getImageUrl((product.name || '').toLowerCase().replace(/\s+/g, '-') + '.jpg');
 
   // Calculate MOP (MRP - 45%)
   const mopPerSqft = product.mrp_per_sqft * 0.55; // 55% of MRP (100% - 45%)
 
-  // Calculate discounted price
-  const discountedPricePerSqft = product.mrp_per_sqft * (1 - discount / 100);
-
   // Calculate cost per sqft with freight as per sqft cost
   const calculateCostPerSqft = () => {
     // Ex-factory price is already per sqft (as clarified)
     const exFactoryPerSqft = product.ex_factory_price;
     
+    // Get size-specific discount and freight
+    const discountMap = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
+    const sizeDiscount = discountMap[product.size] || companyDiscount;
+    const sizeFreight = product.freight || freightValue;
+    
     // Apply company discount to ex-factory price first
-    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - companyDiscount / 100);
+    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - sizeDiscount / 100);
     
     // Insurance is calculated on the ex-factory price after company discount
     const insuranceCostPerSqft = exFactoryAfterCompanyDiscount * (product.insurance_percentage / 100);
@@ -42,15 +120,15 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
     const gstCostPerSqft = baseForGst * (product.gst_percentage / 100);
     
     // Freight is already per sqft - no conversion needed
-    const freightCostPerSqft = freightValue;
+    const freightCostPerSqft = sizeFreight;
     
     // Total cost per sqft
     return exFactoryAfterCompanyDiscount + insuranceCostPerSqft + gstCostPerSqft + freightCostPerSqft;
   };
 
   const costPerSqft = calculateCostPerSqft();
-  const marginAmount = discountedPricePerSqft - costPerSqft;
-  const marginPercentage = discountedPricePerSqft > 0 ? (marginAmount / discountedPricePerSqft) * 100 : 0;
+  const marginAmount = finalPrice - costPerSqft;
+  const marginPercentage = finalPrice > 0 ? (marginAmount / finalPrice) * 100 : 0;
 
   const handleSaveFreight = async () => {
     setSavingFreight(true);
@@ -89,7 +167,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
-                <p className="text-gray-600">{product.size}</p>
+                <p className="text-gray-600">{product.size ? formattedSize : ''}</p>
               </div>
             </div>
             <button
@@ -143,11 +221,10 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-emerald-700">MOP (MRP - 45%)</p>
-                      <p className="text-2xl font-bold text-emerald-800">₹{mopPerSqft.toFixed(2)}</p>
-                      <p className="text-xs text-emerald-600">per sqft</p>
+                      <p className="text-2xl font-bold text-emerald-800">{formatPriceDisplay(getPriceValue(mopPerSqft, product.mrp_per_box, billingType), billingType)}</p>
                     </div>
                     <div className="bg-emerald-100 rounded-full p-3">
-                      <DollarSign className="w-6 h-6 text-emerald-600" />
+                      <IndianRupee className="w-6 h-6 text-emerald-600" />
                     </div>
                   </div>
                 </div>
@@ -175,7 +252,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 {/* Company Discount Input */}
                 <div className="bg-white rounded-lg p-4 mb-4 border border-emerald-200">
                   <label className="block text-sm font-medium text-emerald-700 mb-2">
-                    Company Discount (%)
+                    Company Discount for {product.size ? formattedSize : ''} (%)
                   </label>
                   <div className="relative">
                     <Percent className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-400 w-5 h-5" />
@@ -190,25 +267,38 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                       max="100"
                     />
                   </div>
-                  <p className="text-xs text-emerald-600 mt-1">
-                    Discount on ex-factory price given by company
-                  </p>
                 </div>
 
-                {/* Discounted Price Display */}
-                <div className="bg-white rounded-lg p-4 border border-emerald-200">
+                {/* Billed SQFT Display */}
+                <div className="bg-white rounded-lg p-4 mb-4 border border-emerald-200">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-emerald-700">
-                        Final Price (MRP - {discount.toFixed(1)}%)
-                      </p>
-                      <p className="text-2xl font-bold text-emerald-800">₹{discountedPricePerSqft.toFixed(2)}</p>
-                      <p className="text-xs text-emerald-600">per sqft</p>
+                      <p className="text-sm font-medium text-emerald-700">Billed SQFT per Box</p>
+                      <p className="text-2xl font-bold text-emerald-800">{billedSqftPerBox.toFixed(2)} sqft</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-emerald-600">Original MRP</p>
-                      <p className="text-lg font-semibold text-emerald-700">₹{product.mrp_per_sqft.toFixed(2)}</p>
+                    <div className="bg-emerald-100 rounded-full p-3">
+                      <Ruler className="w-6 h-6 text-emerald-600" />
                     </div>
+                  </div>
+                </div>
+
+                {/* Final Price Input */}
+                <div className="bg-white rounded-lg p-4 border border-emerald-200">
+                  <label className="block text-sm font-medium text-emerald-700 mb-2">
+                    Final Price (MRP - {discount.toFixed(1)}%)
+                  </label>
+                  <div className="relative">
+                    <Percent className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-400 w-5 h-5" />
+                    <input
+                      type="number"
+                      value={finalPrice.toFixed(2)}
+                      onChange={(e) => setFinalPrice(parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
+                      className="w-full pl-10 pr-4 py-2 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                    />
                   </div>
                 </div>
               </div>
@@ -229,7 +319,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                       <Ruler className="w-4 h-4 text-gray-600" />
                       <span className="text-sm font-medium text-gray-600">Size</span>
                     </div>
-                    <p className="text-lg font-semibold text-gray-900">{product.size}</p>
+                    <p className="text-lg font-semibold text-gray-900">{product.size ? formattedSize : ''}</p>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-lg">
@@ -253,7 +343,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
               {/* Pricing Information */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                  <DollarSign className="w-5 h-5" />
+                  <IndianRupee className="w-5 h-5" />
                   <span>Pricing Details</span>
                 </h3>
                 
@@ -261,11 +351,11 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-green-700">MRP per sqft</p>
-                        <p className="text-2xl font-bold text-green-800">₹{product.mrp_per_sqft.toFixed(2)}</p>
+                        <p className="text-sm font-medium text-green-700">{getColumnHeader('MRP per sqft', billingType)}</p>
+                        <p className="text-2xl font-bold text-green-800">{formatPriceDisplay(getPriceValue(product.mrp_per_sqft, product.mrp_per_box, billingType), billingType)}</p>
                       </div>
                       <div className="bg-green-600 rounded-full p-2">
-                        <DollarSign className="w-5 h-5 text-white" />
+                        <IndianRupee className="w-5 h-5 text-white" />
                       </div>
                     </div>
                   </div>
@@ -277,9 +367,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     </div>
 
                     <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                      <p className="text-sm font-medium text-purple-700">Ex-Factory Price</p>
-                      <p className="text-xl font-bold text-purple-800">₹{product.ex_factory_price.toFixed(2)}</p>
-                      <p className="text-xs text-purple-600">per sqft</p>
+                      <p className="text-sm font-medium text-purple-700">{getColumnHeader('Ex-Factory Price per sqft', billingType)}</p>
+                      <p className="text-xl font-bold text-purple-800">{formatPriceDisplay(getPriceValue(product.ex_factory_price, product.mrp_per_box, billingType), billingType)}</p>
                     </div>
                   </div>
                 </div>
@@ -294,13 +383,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-sm font-medium text-gray-600">Actual sqft per box</p>
-                    <p className="text-xl font-bold text-gray-900">{product.actual_sqft_per_box.toFixed(2)} sqft</p>
+                    <p className="text-sm font-medium text-gray-600">{getColumnHeader('SQFT in Box', billingType)}</p>
+                    <p className="text-xl font-bold text-gray-900">{formatBillingDisplay(getSqftValue(product.actual_sqft_per_box, product.billed_sqft_per_box, billingType, 'actual'), billingType)}</p>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-sm font-medium text-gray-600">Billed sqft per box</p>
-                    <p className="text-xl font-bold text-gray-900">{product.billed_sqft_per_box.toFixed(2)} sqft</p>
+                    <p className="text-sm font-medium text-gray-600">{getColumnHeader('SQFT in Box', billingType)} (Billed)</p>
+                    <p className="text-xl font-bold text-gray-900">{formatBillingDisplay(getSqftValue(product.actual_sqft_per_box, product.billed_sqft_per_box, billingType, 'billed'), billingType)}</p>
                   </div>
                 </div>
               </div>
@@ -325,7 +414,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
                         <Truck className="w-4 h-4 text-teal-600" />
-                        <span className="text-sm font-medium text-teal-700">Freight cost</span>
+                        <span className="text-sm font-medium text-teal-700">{getColumnHeader('Freight per sqft', billingType)} for {product.size ? formattedSize : ''}</span>
                       </div>
                       {!editingFreight && (
                         <button
@@ -371,8 +460,8 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                       </div>
                     ) : (
                       <>
-                        <p className="text-xl font-bold text-teal-800">₹{freightValue.toFixed(2)}</p>
-                        <p className="text-xs text-teal-600">per sqft</p>
+                        <p className="text-xl font-bold text-teal-800">{formatPriceDisplay(getFreightValue(freightValue, billingType), billingType)}</p>
+                        <p className="text-xs text-teal-600">size-specific</p>
                       </>
                     )}
                   </div>
@@ -406,7 +495,13 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                   {(() => {
                     // Calculate all values per sqft for consistency
                     const exFactoryPerSqft = product.ex_factory_price; // Already per sqft
-                    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - companyDiscount / 100);
+                    
+                    // Get size-specific discount and freight
+                    const discountMap = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
+                    const sizeDiscount = discountMap[product.size] || companyDiscount;
+                    const sizeFreight = product.freight || freightValue;
+                    
+                    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - sizeDiscount / 100);
                     const insuranceCostPerSqft = exFactoryAfterCompanyDiscount * (product.insurance_percentage / 100);
                     
                     // GST is calculated on (ex-factory after company discount + insurance)
@@ -414,7 +509,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                     const gstCostPerSqft = baseForGst * (product.gst_percentage / 100);
                     
                     // Freight is already per sqft - no conversion needed
-                    const freightCostPerSqft = freightValue;
+                    const freightCostPerSqft = sizeFreight;
                     
                     return (
                       <>
@@ -426,7 +521,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                               <span className="font-semibold text-indigo-800">₹{exFactoryPerSqft.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-indigo-600">After {companyDiscount.toFixed(1)}% company discount:</span>
+                              <span className="text-indigo-600">After {sizeDiscount.toFixed(1)}% company discount:</span>
                               <span className="font-semibold text-indigo-800">₹{exFactoryAfterCompanyDiscount.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
@@ -442,7 +537,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                               <span className="font-semibold text-indigo-800">₹{gstCostPerSqft.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-indigo-600">Freight per sqft:</span>
+                              <span className="text-indigo-600">Freight per sqft ({product.size ? formattedSize : ''}):</span>
                               <span className="font-semibold text-indigo-800">₹{freightCostPerSqft.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between border-t border-indigo-200 pt-1">
@@ -454,7 +549,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClos
                         
                         <div className="flex justify-between">
                           <span className="text-indigo-700">Selling price per sqft:</span>
-                          <span className="font-semibold text-indigo-800">₹{discountedPricePerSqft.toFixed(2)}</span>
+                          <span className="font-semibold text-indigo-800">₹{finalPrice.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between border-t border-indigo-200 pt-2">
                           <span className="text-indigo-700">Margin per sqft:</span>

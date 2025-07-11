@@ -15,9 +15,13 @@ const CustomerList: React.FC = () => {
   const [showEditor, setShowEditor] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<QuotationCustomer | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const { session } = useAuth();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<QuotationCustomer | null>(null);
+
+
 
   useEffect(() => {
     if (session?.access_token) {
@@ -37,7 +41,6 @@ const CustomerList: React.FC = () => {
 
       setCustomers(response.data || []);
     } catch (error) {
-      console.error('Error loading customers:', error);
       setError(error instanceof Error ? error.message : 'Failed to load customers');
     } finally {
       setLoading(false);
@@ -53,6 +56,19 @@ const CustomerList: React.FC = () => {
       customer.gst_number?.toLowerCase().includes(searchLower)
     );
   });
+
+  // Get paginated customers
+  const paginatedCustomers = filteredCustomers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+
+  // Reset to page 1 when items per page changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
 
   const handleEdit = (customer: QuotationCustomer) => {
     setEditingCustomer(customer);
@@ -95,7 +111,6 @@ const CustomerList: React.FC = () => {
       setDeleteDialogOpen(false);
       setCustomerToDelete(null);
     } catch (error) {
-      console.error('Error deleting customer:', error);
       alert(error instanceof Error ? error.message : 'Failed to delete customer');
     }
   };
@@ -172,15 +187,30 @@ const CustomerList: React.FC = () => {
 
       {/* Search */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 lg:p-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Search customers by name, email, phone, or GST number..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search customers by name, email, phone, or GST number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">Show:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value={10}>10</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-sm text-gray-600">items</span>
+          </div>
         </div>
       </div>
 
@@ -210,7 +240,7 @@ const CustomerList: React.FC = () => {
           <>
             {/* Mobile Cards View */}
             <div className="lg:hidden">
-              {filteredCustomers.map((customer) => (
+              {paginatedCustomers.map((customer) => (
                 <div key={customer.id} className="border-b border-gray-200 p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center flex-1">
@@ -304,7 +334,7 @@ const CustomerList: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCustomers.map((customer) => (
+                  {paginatedCustomers.map((customer) => (
                     <tr key={customer.id} className="hover:bg-gray-50 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -388,6 +418,128 @@ const CustomerList: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+          <div className="flex-1 flex justify-between sm:hidden">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredCustomers.length)}</span>{' '}
+                of <span className="font-medium">{filteredCustomers.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                {(() => {
+                  const pages = [];
+                  const pageWindow = 2; // Show 2 pages before/after current
+                  let start = Math.max(2, currentPage - pageWindow);
+                  let end = Math.min(totalPages - 1, currentPage + pageWindow);
+                  if (currentPage <= 3) {
+                    start = 2;
+                    end = Math.min(5, totalPages - 1);
+                  }
+                  if (currentPage >= totalPages - 2) {
+                    start = Math.max(2, totalPages - 4);
+                    end = totalPages - 1;
+                  }
+                  // Always show first page
+                  pages.push(
+                    <button
+                      key={1}
+                      onClick={() => setCurrentPage(1)}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        currentPage === 1
+                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      1
+                    </button>
+                  );
+                  // Ellipsis if needed
+                  if (start > 2) {
+                    pages.push(
+                      <span key="start-ellipsis" className="px-2">...</span>
+                    );
+                  }
+                  // Page window
+                  for (let page = start; page <= end; page++) {
+                    pages.push(
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          currentPage === page
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+                  // Ellipsis if needed
+                  if (end < totalPages - 1) {
+                    pages.push(
+                      <span key="end-ellipsis" className="px-2">...</span>
+                    );
+                  }
+                  // Always show last page
+                  if (totalPages > 1) {
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          currentPage === totalPages
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+                  return pages;
+                })()}
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="bg-red-50 border-red-200">

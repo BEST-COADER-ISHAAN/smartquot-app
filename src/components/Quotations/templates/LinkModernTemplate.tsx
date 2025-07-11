@@ -1,26 +1,28 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Quotation } from '../../../types';
-import { Building, User, Calendar, Image as ImageIcon, FileText, Layers, Package, Printer, Share2, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatSizeForDisplay } from '../../../lib/sizeUtils';
+import { getQuotationCompanyDetailsAsync } from '../../../lib/companyUtils';
+import OnlineQuotationComponent from '@/components/ui/OnlineQuotationComponent';
+import { Building, User, Calendar, Image as ImageIcon, FileText, Layers, Package, Printer, Share2, ChevronDown, ChevronUp, IndianRupee, Phone, Mail, MapPin } from 'lucide-react';
+import { usePreferredSizeUnit } from '../../../hooks/usePreferredSizeUnit';
 
 interface LinkModernTemplateProps {
   quotation: Quotation;
 }
 
-function mapQuotationToQuotationData(quotation: Quotation) {
-  const companyName = localStorage.getItem('company_name') || 'Your Company Name';
-  const companyAddress = localStorage.getItem('company_address') || 'Your Company Address';
-  const companyPhone = localStorage.getItem('company_phone') || '+91-0000000000';
-  const companyEmail = localStorage.getItem('company_email') || 'info@yourcompany.com';
+async function mapQuotationToQuotationData(quotation: Quotation, preferredSizeUnit: 'inches' | 'mm' | 'feet' | 'custom') {
+  // Get current company details with preferences
+  const companyDetails = await getQuotationCompanyDetailsAsync();
   const includeImages = !!quotation.include_images;
   let rooms: any[] = [];
   let items: any[] = [];
   if (quotation.rooms) {
-    rooms = quotation.rooms.map((room: any) => ({
+    rooms = await Promise.all(quotation.rooms.map(async (room: any) => ({
       room_name: room.room_name,
-      items: (room.items || []).map((item: any) => ({
+      items: await Promise.all((room.items || []).map(async (item: any) => ({
         id: item.id || 'N/A',
         description: item.product?.name || 'Product',
-        size: item.product?.size || '',
+        size: item.product?.size ? await formatSizeForDisplay(item.product.size, preferredSizeUnit) : '',
         surface: item.product?.surface || '',
         actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
         billedSqftPerBox: item.product?.billed_sqft_per_box || 0,
@@ -33,30 +35,34 @@ function mapQuotationToQuotationData(quotation: Quotation) {
         margin: item.margin_amount || 0,
         marginPercentage: item.margin_percentage || 0,
         imageUrl: item.product?.image_url || '',
-      })),
+      }))),
       room_total: room.room_total || 0,
-    }));
+    })));
     items = (rooms ?? []).flatMap((r: any) => r.items);
   } else {
-    items = ((quotation.rooms as any[] ?? [])).flatMap((room: any) =>
-      (room.items || []).map((item: any) => ({
-        id: item.id || 'N/A',
-        description: item.product?.name || 'Product',
-        size: item.product?.size || '',
-        surface: item.product?.surface || '',
-        actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
-        billedSqftPerBox: item.product?.billed_sqft_per_box || 0,
-        sqftNeeded: item.sqft_needed || 0,
-        boxNeeded: item.box_needed || 0,
-        quantity: item.quantity_boxes || 1,
-        unitPrice: item.rate_per_sqft || 0,
-        pricePerBox: item.mrp_per_box || 0,
-        total: item.amount || 0,
-        margin: item.margin_amount || 0,
-        marginPercentage: item.margin_percentage || 0,
-        imageUrl: item.product?.image_url || '',
-      }))
-    );
+    const itemPromises: Promise<any>[] = [];
+    for (const room of (quotation.rooms as any[] ?? [])) {
+      for (const item of (room.items || [])) {
+        itemPromises.push((async () => ({
+          id: item.id || 'N/A',
+          description: item.product?.name || 'Product',
+          size: item.product?.size ? await formatSizeForDisplay(item.product.size, preferredSizeUnit) : '',
+          surface: item.product?.surface || '',
+          actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
+          billedSqftPerBox: item.product?.billed_sqft_per_box || 0,
+          sqftNeeded: item.sqft_needed || 0,
+          boxNeeded: item.box_needed || 0,
+          quantity: item.quantity_boxes || 1,
+          unitPrice: item.rate_per_sqft || 0,
+          pricePerBox: item.mrp_per_box || 0,
+          total: item.amount || 0,
+          margin: item.margin_amount || 0,
+          marginPercentage: item.margin_percentage || 0,
+          imageUrl: item.product?.image_url || '',
+        }))());
+      }
+    }
+    items = await Promise.all(itemPromises);
   }
   return {
     id: quotation.id || 'N/A',
@@ -64,11 +70,11 @@ function mapQuotationToQuotationData(quotation: Quotation) {
     date: quotation.created_at?.split('T')[0] || '2024-01-01',
     validUntil: quotation.updated_at?.split('T')[0] || '2024-12-31',
     status: (quotation.status as 'draft' | 'sent' | 'approved' | 'rejected') || 'draft',
-    companyLogo: '',
-    companyName,
-    companyAddress,
-    companyPhone,
-    companyEmail,
+    companyLogo: companyDetails.logo || '',
+    companyName: companyDetails.companyName || 'Your Company Name',
+    companyAddress: companyDetails.companyAddress || 'Your Company Address',
+    companyPhone: companyDetails.companyPhone || '+91-0000000000',
+    companyEmail: companyDetails.companyEmail || 'info@yourcompany.com',
     clientName: quotation.customer?.name || 'Client Name',
     clientCompany: '',
     clientAddress: quotation.customer?.site_address || 'Client Address',
@@ -100,8 +106,44 @@ function mapQuotationToQuotationData(quotation: Quotation) {
 const fontStack = 'font-sans antialiased';
 
 const LinkModernTemplate: React.FC<LinkModernTemplateProps> = ({ quotation }) => {
-  const data = mapQuotationToQuotationData(quotation);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+  const { preferredSizeUnit } = usePreferredSizeUnit();
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    mapQuotationToQuotationData(quotation, preferredSizeUnit)
+      .then((result) => {
+        setData(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Could not load company details.');
+        setLoading(false);
+      });
+  }, [quotation, preferredSizeUnit]);
+
+  useEffect(() => {
+    if (!data) return;
+    async function fetchFormattedSizes() {
+      const newFormatted: { [size: string]: string } = {};
+      for (const item of data.items) {
+        if (item.product?.size) {
+          newFormatted[item.product.size] = await formatSizeForDisplay(item.product.size, preferredSizeUnit);
+        }
+      }
+      setFormattedSizes(newFormatted);
+    }
+    fetchFormattedSizes();
+  }, [data, preferredSizeUnit]);
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
+  if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
+  if (!data) return <div className="p-8 text-center text-red-600">No company details found.</div>;
 
   // Print handler
   const handlePrint = () => {
@@ -218,7 +260,7 @@ const LinkModernTemplate: React.FC<LinkModernTemplateProps> = ({ quotation }) =>
                     <div className="text-xs text-gray-500 mb-1">{item.category}</div>
                     <div className="flex flex-col gap-1 w-full">
                       <div className="flex gap-3 text-sm text-gray-600 mb-2">
-                        <span>Size: <b>{item.size}</b></span>
+                        <span>Size: <b>{item.size ? formattedSizes[item.size] || item.size : ''}</b></span>
                         <span>Surface: <b>{item.surface}</b></span>
                       </div>
                       <div className="flex gap-3 text-sm text-gray-600 mb-2">
@@ -257,7 +299,7 @@ const LinkModernTemplate: React.FC<LinkModernTemplateProps> = ({ quotation }) =>
                 <div className="text-xs text-gray-500 mb-1">{item.category}</div>
                 <div className="flex flex-col gap-1 w-full">
                   <div className="flex gap-3 text-sm text-gray-600 mb-2">
-                    <span>Size: <b>{item.size}</b></span>
+                    <span>Size: <b>{item.size ? formattedSizes[item.size] || item.size : ''}</b></span>
                     <span>Surface: <b>{item.surface}</b></span>
                   </div>
                   <div className="flex gap-3 text-sm text-gray-600 mb-2">
@@ -299,7 +341,7 @@ const LinkModernTemplate: React.FC<LinkModernTemplateProps> = ({ quotation }) =>
                   style={{ maxWidth: 96, maxHeight: 96 }}
                 />
                 <div className="text-xs font-medium text-center truncate w-full" title={item.description}>{item.description}</div>
-                <div className="text-xs text-muted-foreground text-center">{item.size}</div>
+                <div className="text-xs text-muted-foreground text-center">{item.size ? formattedSizes[item.size] || item.size : ''}</div>
               </div>
             ))}
           </div>

@@ -129,4 +129,6 @@ export interface Quotation {
   show_price_per_box: boolean;
   show_amount: boolean;
   show_margin: boolean;
+  local_freight?: number;
+  unloading?: number;
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Search, Filter, Edit, Trash2, Archive, Download, Upload, Package, SortAsc, SortDesc } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import type { User } from '@supabase/supabase-js';
@@ -10,25 +10,15 @@ import { api } from '../../lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { AlertTriangle } from 'lucide-react';
+import { formatSizeForDisplay } from '../../lib/sizeUtils';
+import { getBillingTypeForSize, formatPriceDisplay, getPriceValue } from '../../lib/billingUtils';
+import { QuotationProduct } from '../../types';
+import { supabase } from '../../lib/supabase';
+import { usePreferredSizeUnit } from '../../hooks/usePreferredSizeUnit';
 
-interface Product {
-  id: string;
-  name: string;
-  collection: string;
-  size: string;
-  surface: string;
-  ex_factory_price: number;
-  mrp_per_sqft: number;
-  mrp_per_box: number;
-  gst_percentage: number;
-  insurance_percentage: number;
-  actual_sqft_per_box: number;
-  billed_sqft_per_box: number;
-  is_archived: boolean;
+type Product = QuotationProduct & {
   user_id: string;
-  weight: number;
-  freight: number;
-}
+};
 
 const ProductList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,13 +35,172 @@ const ProductList: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const itemsPerPage = 20;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const { user, session } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+  const formattedSizesRef = useRef(formattedSizes);
+  useEffect(() => { formattedSizesRef.current = formattedSizes; }, [formattedSizes]);
+  const [formattedPrices, setFormattedPrices] = useState<{ [productId: string]: string }>({});
+  const { preferredSizeUnit } = usePreferredSizeUnit();
+  const [pricesLoading, setPricesLoading] = useState(false);
 
-  const loadProducts = async () => {
+  // Optimized helper functions with caching
+  const discountCacheRef = useRef<{ [size: string]: number }>({});
+  const billingTypeCacheRef = useRef<{ [size: string]: string }>({});
+  
+  const getCustomerDiscount = useCallback(async (userId: string, size: string): Promise<number> => {
+    if (discountCacheRef.current[size] !== undefined) return discountCacheRef.current[size];
+    const { data, error } = await supabase
+      .from('discounts')
+      .select('customer_discount')
+      .eq('user_id', userId)
+      .eq('size', size)
+      .single();
+    if (error || !data) return 0;
+    discountCacheRef.current[size] = data.customer_discount || 0;
+    return discountCacheRef.current[size];
+  }, []);
+
+  const getBillingTypeForSizeCached = useCallback(async (userId: string, size: string): Promise<string> => {
+    if (billingTypeCacheRef.current[size] !== undefined) return billingTypeCacheRef.current[size];
+    const billingType = await getBillingTypeForSize(userId, size);
+    billingTypeCacheRef.current[size] = billingType;
+    return billingType;
+  }, []);
+
+  // Helper to calculate discounted price (returns number for calculations)
+  const getDiscountedPrice = useCallback(async (product: Product, userId: string) => {
+    const discount = await getCustomerDiscount(userId, product.size);
+    const discountedPrice = product.mrp_per_sqft - (product.mrp_per_sqft * discount / 100);
+    return discountedPrice;
+  }, [getCustomerDiscount]);
+
+  // Helper to get formatted discounted price display
+  const getFormattedDiscountedPrice = useCallback(async (product: Product, userId: string = '') => {
+    const [discountedPrice, billingType, discount] = await Promise.all([
+      getDiscountedPrice(product, userId),
+      getBillingTypeForSizeCached(userId, product.size),
+      getCustomerDiscount(userId, product.size)
+    ]);
+    
+    const formattedPrice = formatPriceDisplay(getPriceValue(discountedPrice, product.mrp_per_box, billingType), billingType);
+    if (discount > 0) {
+      return `${formattedPrice} (-${discount}%)`;
+    }
+    return formattedPrice;
+  }, [getDiscountedPrice, getBillingTypeForSizeCached, getCustomerDiscount]);
+
+  // Memoize filtered and sorted products
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      // Filter by archived status
+      if (filterArchived !== product.is_archived) return false;
+      
+      // Filter by search term
+      if (debouncedSearchTerm) {
+        const searchLower = debouncedSearchTerm.toLowerCase();
+        return (
+          product.name.toLowerCase().includes(searchLower) ||
+          (product.collection?.toLowerCase() || '').includes(searchLower) ||
+          product.size.toLowerCase().includes(searchLower) ||
+          (product.surface?.toLowerCase() || '').includes(searchLower)
+        );
+      }
+      
+      return true;
+    });
+  }, [products, filterArchived, debouncedSearchTerm]);
+
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      const aValue = (a as any)[sortBy] || '';
+      const bValue = (b as any)[sortBy] || '';
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredProducts, sortBy, sortOrder]);
+
+  // Memoize paginated products
+  const paginatedProducts = useMemo(() => {
+    return sortedProducts.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [sortedProducts, currentPage, itemsPerPage]);
+
+  // Batch async operations for formatted sizes
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchFormattedSizes() {
+      const newFormatted: { [size: string]: string } = {};
+      const uniqueSizes = new Set(paginatedProducts.map(p => p.size).filter(Boolean));
+      
+      for (const size of uniqueSizes) {
+        if (!formattedSizes[size]) {
+          newFormatted[size] = await formatSizeForDisplay(size, preferredSizeUnit);
+        }
+      }
+      
+      if (isMounted && Object.keys(newFormatted).length > 0) {
+        setFormattedSizes(prev => ({ ...prev, ...newFormatted }));
+      }
+    }
+    
+    fetchFormattedSizes();
+    return () => { isMounted = false; };
+  }, [paginatedProducts, preferredSizeUnit]);
+
+  // Batch async operations for formatted prices
+  useEffect(() => {
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
+    
+    async function fetchFormattedPrices() {
+      setPricesLoading(true);
+      const newPrices: { [productId: string]: string } = {};
+      
+      // Batch process products
+      const promises = paginatedProducts.map(async (product) => {
+        const price = await getFormattedDiscountedPrice(product, typeof user?.id === 'string' ? user.id : '');
+        return { id: product.id, price };
+      });
+      
+      const results = await Promise.all(promises);
+      
+      if (isMounted) {
+        const newPricesMap = results.reduce((acc, { id, price }) => {
+          acc[id] = price;
+          return acc;
+        }, {} as { [productId: string]: string });
+        
+        setFormattedPrices(newPricesMap);
+        setPricesLoading(false);
+      }
+    }
+    
+    // Debounce price calculations to avoid excessive API calls
+    timeoutId = setTimeout(() => {
+      fetchFormattedPrices();
+    }, 300);
+    
+    return () => { 
+      isMounted = false; 
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [paginatedProducts, user?.id, getFormattedDiscountedPrice]);
+
+  // Memoize total pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredProducts.length / itemsPerPage);
+  }, [filteredProducts.length, itemsPerPage]);
+
+  // Memoize loadProducts function
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
       const token = session?.access_token;
@@ -69,13 +218,14 @@ const ProductList: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [session?.access_token]);
 
+  // Load products only when necessary
   useEffect(() => {
     if (session?.access_token) {
       loadProducts();
     }
-  }, [currentPage, debouncedSearchTerm, filterArchived, sortBy, sortOrder, session?.access_token]);
+  }, [loadProducts]);
 
   const handleDelete = async () => {
     if (!productToDelete) return;
@@ -102,37 +252,24 @@ const ProductList: React.FC = () => {
     }
   };
 
-  const totalPages = Math.ceil(totalCount / itemsPerPage);
+  // Reset to page 1 when items per page changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
 
-  const handleSave = (savedProduct?: Product) => {
+  const handleSave = (savedProduct?: QuotationProduct) => {
     if (savedProduct) {
+      const productWithUserId = savedProduct as Product;
       setProducts(prev => {
-        const existing = prev.find(p => p.id === savedProduct.id);
+        const existing = prev.find(p => p.id === productWithUserId.id);
         if (existing) {
-          return prev.map(p => p.id === savedProduct.id ? savedProduct : p);
+          return prev.map(p => p.id === productWithUserId.id ? productWithUserId : p);
         } else {
-          return [savedProduct, ...prev];
+          return [productWithUserId, ...prev];
         }
       });
     }
     setShowEditor(false);
-  };
-
-  // Add frontend sorting for products
-  const sortedProducts = [...products].sort((a, b) => {
-    const aValue = a[sortBy] || '';
-    const bValue = b[sortBy] || '';
-    if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  // Get discount mapping from localStorage
-  const discountMap: Record<string, number> = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
-  // Helper to calculate discounted price
-  const getDiscountedPrice = (product: Product) => {
-    const discount = discountMap[product.size] || 0;
-    return product.mrp_per_sqft - (product.mrp_per_sqft * discount / 100);
   };
 
   return (
@@ -161,6 +298,19 @@ const ProductList: React.FC = () => {
           <span>{filterArchived ? 'Show Active' : 'Show Archived'}</span>
         </button>
         <div className="flex flex-col sm:flex-row gap-2 lg:gap-3">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">Show:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value={10}>10</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-sm text-gray-600">items</span>
+          </div>
           <button
             onClick={() => setShowImporter(true)}
             className="flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
@@ -186,15 +336,15 @@ const ProductList: React.FC = () => {
           </div>
         ) : (
           <>
-            {products.length === 0 && !loading && (
+            {sortedProducts.length === 0 && !loading && (
               <div className="p-8 text-center text-gray-500">
-                <p>No products found.</p>
+                <p>{debouncedSearchTerm ? 'No products found matching your search.' : 'No products found.'}</p>
               </div>
             )}
             
             {/* Mobile Cards View */}
             <div className="lg:hidden">
-              {sortedProducts.map((product) => (
+              {paginatedProducts.map((product) => (
                 <div
                   key={product.id}
                   className="border-b border-gray-200 p-4 cursor-pointer hover:bg-gray-50"
@@ -207,7 +357,7 @@ const ProductList: React.FC = () => {
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900 text-sm">{product.name}</h3>
                       <p className="text-gray-500 text-xs">{product.collection}</p>
-                      <p className="text-gray-500 text-xs">Size: {product.size}</p>
+                      <p className="text-gray-500 text-xs">Size: {formattedSizes[product.size] || product.size}</p>
                     </div>
                     <div className="flex items-center space-x-1">
                       <button
@@ -236,6 +386,10 @@ const ProductList: React.FC = () => {
                     <div>
                       <span className="text-gray-500">Surface:</span>
                       <span className="ml-1 font-medium">{product.surface}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Price:</span>
+                      <span className="ml-1 font-medium">{formattedPrices[product.id] || '...'}</span>
                     </div>
                   </div>
                 </div>
@@ -284,7 +438,7 @@ const ProductList: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {sortedProducts.map((product) => (
+                  {paginatedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className="hover:bg-gray-50 cursor-pointer"
@@ -302,13 +456,22 @@ const ProductList: React.FC = () => {
                         <div className="text-sm text-gray-900">{product.collection}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{product.size}</div>
+                        <div className="text-sm text-gray-900">{formattedSizes[product.size] || product.size}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{product.surface}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">₹{getDiscountedPrice(product).toFixed(2)}</div>
+                        <div className="text-sm text-gray-900">
+                          {pricesLoading && !formattedPrices[product.id] ? (
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+                              Calculating...
+                            </div>
+                          ) : (
+                            formattedPrices[product.id] || '...'
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
@@ -362,8 +525,8 @@ const ProductList: React.FC = () => {
                   <div>
                     <p className="text-sm text-gray-700">
                       Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                      <span className="font-medium">{Math.min(currentPage * itemsPerPage, totalCount)}</span>{' '}
-                      of <span className="font-medium">{totalCount}</span> results
+                      <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredProducts.length)}</span>{' '}
+                      of <span className="font-medium">{filteredProducts.length}</span> results
                     </p>
                   </div>
                   <div>
@@ -467,8 +630,8 @@ const ProductList: React.FC = () => {
       {/* Modals */}
       {showEditor && (
         <ProductEditor
-          product={editingProduct}
-          onClose={() => {
+          product={editingProduct || undefined}
+          onCancel={() => {
             setShowEditor(false);
             setEditingProduct(null);
           }}
@@ -488,7 +651,7 @@ const ProductList: React.FC = () => {
 
       {showDetailModal && selectedProduct && (
         <ProductDetailModal
-          product={selectedProduct}
+          product={selectedProduct as any}
           onClose={() => {
             setShowDetailModal(false);
             setSelectedProduct(null);

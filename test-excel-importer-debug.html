@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Importer Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1e40af;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .debug-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #2563eb;
+        }
+        .test-button.danger {
+            background: #ef4444;
+        }
+        .test-button.danger:hover {
+            background: #dc2626;
+        }
+        .test-button.success {
+            background: #10b981;
+        }
+        .test-button.success:hover {
+            background: #059669;
+        }
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Excel Importer Debug Test</h1>
+        
+        <div class="info">
+            <h3>Common Issues to Check</h3>
+            <ul>
+                <li><strong>Authentication:</strong> User session and token validity</li>
+                <li><strong>File Format:</strong> CSV parsing and validation</li>
+                <li><strong>API Calls:</strong> Edge Function connectivity and responses</li>
+                <li><strong>Database:</strong> Schema compatibility and constraints</li>
+                <li><strong>Subscription Limits:</strong> Free plan product limits</li>
+            </ul>
+        </div>
+
+        <div class="debug-section">
+            <h3>1. Authentication Test</h3>
+            <p>Check if user is properly authenticated and has valid session.</p>
+            <button class="test-button" onclick="testAuth()">Test Authentication</button>
+            <div id="auth-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>2. CSV Template Test</h3>
+            <p>Test the CSV template download and parsing functionality.</p>
+            <button class="test-button success" onclick="downloadTemplate()">Download Template</button>
+            <button class="test-button" onclick="testCSVParsing()">Test CSV Parsing</button>
+            <div id="csv-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>3. API Connection Test</h3>
+            <p>Test if the Edge Function is accessible and responding.</p>
+            <button class="test-button" onclick="testAPIConnection()">Test API Connection</button>
+            <div id="api-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>4. Database Schema Test</h3>
+            <p>Test if the products table schema matches the expected format.</p>
+            <button class="test-button" onclick="testDatabaseSchema()">Test Database Schema</button>
+            <div id="schema-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>5. Sample Data Test</h3>
+            <p>Test with a minimal sample product to isolate the issue.</p>
+            <button class="test-button" onclick="testSampleProduct()">Test Sample Product</button>
+            <div id="sample-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>6. Error Logging</h3>
+            <p>Check browser console for detailed error messages.</p>
+            <button class="test-button danger" onclick="clearConsole()">Clear Console</button>
+            <button class="test-button" onclick="showConsoleLogs()">Show Console Logs</button>
+            <div id="console-result"></div>
+        </div>
+
+        <div class="info">
+            <h3>Debugging Steps</h3>
+            <ol>
+                <li><strong>Check Browser Console:</strong> Open Developer Tools (F12) and look for errors</li>
+                <li><strong>Test Authentication:</strong> Ensure user is logged in and session is valid</li>
+                <li><strong>Verify CSV Format:</strong> Download template and check if your CSV matches</li>
+                <li><strong>Check Network Tab:</strong> Look for failed API calls in Network tab</li>
+                <li><strong>Test with Sample Data:</strong> Try importing just one product first</li>
+                <li><strong>Check Subscription Limits:</strong> Free plan has 10 product limit</li>
+            </ol>
+        </div>
+
+        <div class="error">
+            <h3>Common Error Messages</h3>
+            <ul>
+                <li><strong>"Unauthorized":</strong> Authentication token expired or invalid</li>
+                <li><strong>"Product name is required":</strong> CSV missing required fields</li>
+                <li><strong>"Free plan limit reached":</strong> Exceeded 10 product limit</li>
+                <li><strong>"Network Error":</strong> Edge Function not accessible</li>
+                <li><strong>"CSV parsing error":</strong> Invalid file format</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Test Authentication
+        function testAuth() {
+            const result = document.getElementById('auth-result');
+            result.innerHTML = '<p>Testing authentication...</p>';
+            
+            // Check if user is logged in
+            const user = localStorage.getItem('supabase.auth.token');
+            if (user) {
+                result.innerHTML = '<p class="success">✅ User session found</p>';
+            } else {
+                result.innerHTML = '<p class="error">❌ No user session found</p>';
+            }
+        }
+
+        // Download CSV Template
+        function downloadTemplate() {
+            const csvContent = `name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+SPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,,32,2`;
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'products_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            document.getElementById('csv-result').innerHTML = '<p class="success">✅ Template downloaded successfully</p>';
+        }
+
+        // Test CSV Parsing
+        function testCSVParsing() {
+            const csvText = `name,size,collection,surface,ex_factory_price,mrp_per_sqft,mrp_per_box,gst_percentage,insurance_percentage,actual_sqft_per_box,billed_sqft_per_box,weight,freight
+SPACERA LUMINERA,600X1200,SPACERA,Glossy,45,65,120,18,1,15.5,,32,2`;
+            
+            const lines = csvText.split('\n').filter(line => line.trim());
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            const rows = lines.slice(1).map(line => {
+                const values = line.split(',').map(v => v.trim());
+                const row = {};
+                headers.forEach((header, i) => {
+                    const value = values[i] || '';
+                    if (['ex_factory_price', 'mrp_per_sqft', 'mrp_per_box', 'gst_percentage', 'insurance_percentage', 'actual_sqft_per_box', 'weight', 'freight'].includes(header)) {
+                        const numValue = parseFloat(value.replace(/[^\d.-]/g, ''));
+                        row[header] = isNaN(numValue) ? 0 : numValue;
+                    } else if (header === 'billed_sqft_per_box') {
+                        const numValue = parseFloat(value.replace(/[^\d.-]/g, ''));
+                        row[header] = isNaN(numValue) ? undefined : numValue;
+                    } else {
+                        row[header] = value;
+                    }
+                });
+                return row;
+            });
+            
+            document.getElementById('csv-result').innerHTML = `
+                <p class="success">✅ CSV parsing successful</p>
+                <pre>${JSON.stringify(rows, null, 2)}</pre>
+            `;
+        }
+
+        // Test API Connection
+        function testAPIConnection() {
+            const result = document.getElementById('api-result');
+            result.innerHTML = '<p>Testing API connection...</p>';
+            
+            // This would need to be implemented with actual API call
+            result.innerHTML = '<p class="error">❌ API test requires actual implementation</p>';
+        }
+
+        // Test Database Schema
+        function testDatabaseSchema() {
+            const result = document.getElementById('schema-result');
+            result.innerHTML = '<p>Testing database schema...</p>';
+            
+            // Expected schema
+            const expectedSchema = {
+                name: 'string (required)',
+                size: 'string (required)',
+                collection: 'string (optional)',
+                surface: 'string (optional)',
+                ex_factory_price: 'number (required)',
+                mrp_per_sqft: 'number (required)',
+                mrp_per_box: 'number (required)',
+                gst_percentage: 'number (required)',
+                insurance_percentage: 'number (required)',
+                actual_sqft_per_box: 'number (required)',
+                billed_sqft_per_box: 'number (optional)',
+                weight: 'number (required)',
+                freight: 'number (required)',
+                user_id: 'string (auto-added)',
+                created_by: 'string (auto-added)',
+                created_at: 'timestamp (auto-added)',
+                updated_at: 'timestamp (auto-added)'
+            };
+            
+            result.innerHTML = `
+                <p class="success">✅ Expected schema defined</p>
+                <pre>${JSON.stringify(expectedSchema, null, 2)}</pre>
+            `;
+        }
+
+        // Test Sample Product
+        function testSampleProduct() {
+            const result = document.getElementById('sample-result');
+            result.innerHTML = '<p>Testing sample product...</p>';
+            
+            const sampleProduct = {
+                name: 'TEST PRODUCT',
+                size: '600X1200',
+                collection: 'TEST',
+                surface: 'Glossy',
+                ex_factory_price: 45,
+                mrp_per_sqft: 65,
+                mrp_per_box: 120,
+                gst_percentage: 18,
+                insurance_percentage: 1,
+                actual_sqft_per_box: 15.5,
+                billed_sqft_per_box: 15.5,
+                weight: 32,
+                freight: 2
+            };
+            
+            result.innerHTML = `
+                <p class="success">✅ Sample product created</p>
+                <pre>${JSON.stringify(sampleProduct, null, 2)}</pre>
+            `;
+        }
+
+        // Clear Console
+        function clearConsole() {
+            console.clear();
+            document.getElementById('console-result').innerHTML = '<p class="success">✅ Console cleared</p>';
+        }
+
+        // Show Console Logs
+        function showConsoleLogs() {
+            document.getElementById('console-result').innerHTML = `
+                <p class="info">📋 Check browser console (F12) for detailed logs</p>
+                <p>Common console messages to look for:</p>
+                <ul>
+                    <li>Authentication errors</li>
+                    <li>API call failures</li>
+                    <li>CSV parsing errors</li>
+                    <li>Database constraint violations</li>
+                    <li>Network connectivity issues</li>
+                </ul>
+            `;
+        }
+    </script>
+</body>
+</html> 

@@ -75,8 +75,12 @@ const QuotationStep3Page: React.FC = () => {
     }
   };
 
-  const handleFinish = () => {
-    navigate('/quotations');
+  const handleFinish = (createdQuotation?: Quotation) => {
+    if (createdQuotation && createdQuotation.quotation_number) {
+      navigate(`/quotations/${createdQuotation.quotation_number.replace(/^#/, '')}/step3`);
+    } else {
+      navigate('/quotations');
+    }
   };
 
   if (loading) {

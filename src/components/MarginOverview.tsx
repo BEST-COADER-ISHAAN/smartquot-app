@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Percent } from 'lucide-react';
+import { TrendingUp, TrendingDown, IndianRupee, Percent } from 'lucide-react';
 import { MarginData } from '../types';
 
 interface MarginOverviewProps {
@@ -55,7 +55,7 @@ const MarginOverview: React.FC<MarginOverviewProps> = ({ marginData }) => {
                 <p className="text-2xl font-bold text-green-800">₹{currentMonth.revenue.toLocaleString()}</p>
               </div>
               <div className="bg-green-600 rounded-full p-3">
-                <DollarSign className="w-6 h-6 text-white" />
+                <IndianRupee className="w-6 h-6 text-white" />
               </div>
             </div>
             <div className="mt-2 flex items-center text-sm">

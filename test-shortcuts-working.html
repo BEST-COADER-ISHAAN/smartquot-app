@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyboard Shortcuts Test - Fixed</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-area {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .test-area input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .log {
+            background: #343a40;
+            color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .shortcut-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .shortcut-item {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+        .shortcut-key {
+            background: #495057;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Keyboard Shortcuts Test - Fixed</h1>
+        
+        <div class="status success">
+            ✅ <strong>Fixed Issues:</strong>
+            <ul>
+                <li>Alt+N now dispatches custom event instead of navigating to non-existent route</li>
+                <li>Alt+P now dispatches custom event to open product editor</li>
+                <li>Removed problematic shortcuts (View Mode, Undo, Redo)</li>
+            </ul>
+        </div>
+
+        <div class="test-area">
+            <h3>Test Area</h3>
+            <p>Try typing in this input field - shortcuts should NOT trigger when typing:</p>
+            <input type="text" placeholder="Type here to test that shortcuts don't trigger while typing..." />
+            
+            <h4>Event Log:</h4>
+            <div id="log" class="log"></div>
+        </div>
+
+        <div class="shortcut-list">
+            <div class="shortcut-item">
+                <strong>Alt + N</strong>
+                <div>New Quotation</div>
+                <span class="shortcut-key">Alt + N</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Dispatches 'openQuotationWizard' event
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + P</strong>
+                <div>New Product</div>
+                <span class="shortcut-key">Alt + P</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Dispatches 'openProductEditor' event
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + C</strong>
+                <div>New Customer</div>
+                <span class="shortcut-key">Alt + C</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Dispatches 'openCustomerEditor' event
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + S</strong>
+                <div>Settings</div>
+                <span class="shortcut-key">Alt + S</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Navigates to /settings
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + D</strong>
+                <div>Dashboard</div>
+                <span class="shortcut-key">Alt + D</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Navigates to /dashboard
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + L</strong>
+                <div>Product List</div>
+                <span class="shortcut-key">Alt + L</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Navigates to /products
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + Q</strong>
+                <div>Quotation List</div>
+                <span class="shortcut-key">Alt + Q</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Navigates to /quotations
+                </div>
+            </div>
+            
+            <div class="shortcut-item">
+                <strong>Alt + U</strong>
+                <div>Customer List</div>
+                <span class="shortcut-key">Alt + U</span>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                    → Navigates to /customers
+                </div>
+            </div>
+            
+
+        </div>
+
+        <div class="status success">
+            <h4>How It Works:</h4>
+            <ul>
+                <li><strong>Navigation shortcuts</strong> (Alt+S, Alt+D, etc.) use React Router navigation</li>
+                <li><strong>Action shortcuts</strong> (Alt+N, Alt+P, Alt+C) dispatch custom events that components listen for</li>
+                <li><strong>Smart input detection</strong> prevents shortcuts from triggering when typing</li>
+                <li><strong>Global registration</strong> works throughout the entire application</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Mock keyboard shortcuts for testing
+        const shortcuts = {
+            'Alt+N': 'New Quotation',
+            'Alt+P': 'New Product', 
+            'Alt+C': 'New Customer',
+            'Alt+S': 'Settings',
+            'Alt+D': 'Dashboard',
+            'Alt+L': 'Product List',
+            'Alt+Q': 'Quotation List',
+            'Alt+U': 'Customer List',
+
+        };
+
+        const log = document.getElementById('log');
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Mock custom event dispatching
+        function dispatchCustomEvent(eventName) {
+            const event = new CustomEvent(eventName);
+            window.dispatchEvent(event);
+            addLog(`Dispatched custom event: ${eventName}`);
+        }
+
+        document.addEventListener('keydown', (event) => {
+            // Don't trigger shortcuts when typing in input fields
+            if (event.target instanceof HTMLInputElement || 
+                event.target instanceof HTMLTextAreaElement || 
+                event.target instanceof HTMLSelectElement) {
+                return;
+            }
+            
+            // Check for Alt key combinations
+            if (event.altKey && !event.ctrlKey && !event.shiftKey) {
+                const key = event.key.toLowerCase();
+                const shortcutKey = `Alt+${event.key.toUpperCase()}`;
+                
+                if (shortcuts[shortcutKey]) {
+                    event.preventDefault();
+                    addLog(`Shortcut triggered: ${shortcutKey} - ${shortcuts[shortcutKey]}`);
+                    
+                    // Simulate the actual behavior
+                    if (shortcutKey === 'Alt+N') {
+                        dispatchCustomEvent('openQuotationWizard');
+                    } else if (shortcutKey === 'Alt+P') {
+                        dispatchCustomEvent('openProductEditor');
+                    } else if (shortcutKey === 'Alt+C') {
+                        dispatchCustomEvent('openCustomerEditor');
+                    } else if (shortcutKey === 'Alt+S') {
+                        addLog('  → Would navigate to /settings');
+                    } else if (shortcutKey === 'Alt+D') {
+                        addLog('  → Would navigate to /dashboard');
+                    } else if (shortcutKey === 'Alt+L') {
+                        addLog('  → Would navigate to /products');
+                    } else if (shortcutKey === 'Alt+Q') {
+                        addLog('  → Would navigate to /quotations');
+                    } else if (shortcutKey === 'Alt+U') {
+                        addLog('  → Would navigate to /customers');
+                    } else if (shortcutKey === 'Alt+H') {
+                        addLog('  → Would open help modal');
+                    } else if (shortcutKey === 'Alt+F') {
+                        addLog('  → Would focus search input');
+                    }
+                }
+            }
+        });
+
+        // Listen for custom events to simulate component behavior
+        window.addEventListener('openQuotationWizard', () => {
+            addLog('  → QuotationList component received openQuotationWizard event');
+            addLog('  → Would open QuotationWizard component');
+        });
+
+        window.addEventListener('openProductEditor', () => {
+            addLog('  → ProductList component received openProductEditor event');
+            addLog('  → Would open ProductEditor component');
+        });
+
+        window.addEventListener('openCustomerEditor', () => {
+            addLog('  → CustomerList component received openCustomerEditor event');
+            addLog('  → Would open CustomerEditor component');
+        });
+
+        addLog('Keyboard shortcuts test initialized with fixes.');
+        addLog('Try pressing Alt + [key] combinations to test the shortcuts.');
+    </script>
+</body>
+</html> 

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editable Price per SQFT Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .demo-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .demo-table th {
+            background: #f9fafb;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .demo-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .demo-table tr:hover {
+            background: #f9fafb;
+        }
+        .editable-input {
+            width: 80px;
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: right;
+        }
+        .editable-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+        .price-display {
+            font-weight: 500;
+            color: #059669;
+        }
+        .margin-display {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .feature-list {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .feature-list h3 {
+            margin-top: 0;
+            color: #1e293b;
+        }
+        .feature-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .feature-list li {
+            margin-bottom: 8px;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Editable Price per SQFT Feature</h1>
+        
+        <div class="success">
+            <h3>Feature Implemented!</h3>
+            <p>The Price per SQFT column in Quotation Step 1 is now both automatically calculated AND editable. Users can manually adjust the price, and the margin and price/box will update automatically.</p>
+        </div>
+
+        <div class="info">
+            <h3>How It Works</h3>
+            <ul>
+                <li><strong>Automatic Calculation:</strong> Price per SQFT is initially calculated based on MRP and discount</li>
+                <li><strong>Manual Editing:</strong> Users can click and edit the Price per SQFT field directly</li>
+                <li><strong>Auto Updates:</strong> When Price per SQFT changes, Price/Box and Margin update automatically</li>
+                <li><strong>Real-time:</strong> All calculations happen instantly as the user types</li>
+            </ul>
+        </div>
+
+        <div class="feature-list">
+            <h3>Key Features</h3>
+            <ul>
+                <li><strong>Editable Input Field:</strong> Price per SQFT is now an input field instead of read-only text</li>
+                <li><strong>Automatic Recalculation:</strong> Price/Box = Price per SQFT × SQFT in Box</li>
+                <li><strong>Margin Updates:</strong> Margin amount and percentage recalculate based on new pricing</li>
+                <li><strong>Amount Updates:</strong> Total amount updates based on new Price/Box × Quantity</li>
+                <li><strong>Validation:</strong> Input accepts only positive numbers with decimal precision</li>
+            </ul>
+        </div>
+
+        <h2>Demo Table (Before vs After)</h2>
+        
+        <h3>Before: Read-only Price per SQFT</h3>
+        <table class="demo-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Size</th>
+                    <th>Quantity</th>
+                    <th>Discount (%)</th>
+                    <th>Price per SQFT</th>
+                    <th>Price/Box</th>
+                    <th>Amount</th>
+                    <th>Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Marble Design A</td>
+                    <td>24" x 48"</td>
+                    <td>5</td>
+                    <td>45%</td>
+                    <td class="price-display">₹1,100.00</td>
+                    <td class="price-display">₹2,200.00</td>
+                    <td class="price-display">₹11,000.00</td>
+                    <td>
+                        <div class="price-display">₹2,500.00</div>
+                        <div class="margin-display">(22.7%)</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>After: Editable Price per SQFT</h3>
+        <table class="demo-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Size</th>
+                    <th>Quantity</th>
+                    <th>Discount (%)</th>
+                    <th>Price per SQFT</th>
+                    <th>Price/Box</th>
+                    <th>Amount</th>
+                    <th>Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Marble Design A</td>
+                    <td>24" x 48"</td>
+                    <td>5</td>
+                    <td>45%</td>
+                    <td>
+                        <input type="number" value="1200.00" class="editable-input" 
+                               title="Click to edit Price per SQFT" />
+                    </td>
+                    <td class="price-display">₹2,400.00</td>
+                    <td class="price-display">₹12,000.00</td>
+                    <td>
+                        <div class="price-display">₹3,300.00</div>
+                        <div class="margin-display">(27.5%)</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="info">
+            <h3>Technical Implementation</h3>
+            <ul>
+                <li><strong>New Function:</strong> Added <code>updateItemPricePerSqft()</code> function</li>
+                <li><strong>Input Field:</strong> Replaced static text with editable input field</li>
+                <li><strong>Auto Calculation:</strong> Price/Box and Amount update when Price per SQFT changes</li>
+                <li><strong>Margin Recalculation:</strong> Margin is recalculated based on new pricing</li>
+                <li><strong>Validation:</strong> Input accepts positive numbers with decimal precision</li>
+            </ul>
+        </div>
+
+        <h2>Testing Instructions</h2>
+        <ol>
+            <li>Go to Quotation Step 1</li>
+            <li>Add a product to the quotation</li>
+            <li>Enable the "Price per SQFT" column in column visibility settings</li>
+            <li>Click on the Price per SQFT field for any product</li>
+            <li>Edit the value and press Enter or click outside</li>
+            <li>Verify that Price/Box and Margin update automatically</li>
+            <li>Check that the Amount column also updates correctly</li>
+        </ol>
+
+        <div class="success">
+            <h3>Benefits</h3>
+            <ul>
+                <li><strong>Flexibility:</strong> Users can adjust pricing based on market conditions</li>
+                <li><strong>Accuracy:</strong> All calculations remain consistent</li>
+                <li><strong>Efficiency:</strong> No need to go back to product settings to change pricing</li>
+                <li><strong>Real-time:</strong> Immediate feedback on pricing changes</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, FileText, Link, Image, MessageSquare, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, ArrowRight, FileText, Link, Image, MessageSquare, Eye, RotateCcw } from 'lucide-react';
 import { Quotation } from '../../types';
 
 interface QuotationStep2Props {
@@ -17,6 +17,21 @@ const QuotationStep2: React.FC<QuotationStep2Props> = ({ quotation, onNext, onBa
     notes: quotation?.notes || '',
     include_images: quotation?.include_images || false,
   });
+
+  // TODO: Replace with Supabase-based terms_and_conditions fetch
+  const defaultTerms = '';
+
+  const handleResetToDefaults = () => {
+    try {
+      const defaultTerms = localStorage.getItem('terms_and_conditions') || '';
+      setFormData(prev => ({
+        ...prev,
+        terms_conditions: defaultTerms
+      }));
+    } catch (error) {
+      console.error('Error resetting to default terms:', error);
+    }
+  };
 
   const handleNext = () => {
     onNext(formData);
@@ -217,10 +232,28 @@ const QuotationStep2: React.FC<QuotationStep2Props> = ({ quotation, onNext, onBa
       {/* Notes and Terms */}
       <div className="grid md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center space-x-2">
-            <Eye className="w-4 h-4" />
-            <span>Terms & Conditions (shown to customer)</span>
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium text-gray-700 flex items-center space-x-2">
+                <Eye className="w-4 h-4" />
+                <span>Terms & Conditions (shown to customer)</span>
+              </label>
+              {formData.terms_conditions === localStorage.getItem('terms_and_conditions') && formData.terms_conditions && (
+                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">
+                  Default
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleResetToDefaults}
+              className="flex items-center space-x-1 px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors duration-200"
+              title="Reset to default terms from settings"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset to Default</span>
+            </button>
+          </div>
           <textarea
             value={formData.terms_conditions}
             onChange={(e) => setFormData({ ...formData, terms_conditions: e.target.value })}
@@ -228,9 +261,16 @@ const QuotationStep2: React.FC<QuotationStep2Props> = ({ quotation, onNext, onBa
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Enter terms and conditions that will be visible to the customer..."
           />
-          <p className="text-xs text-gray-500 mt-1">
-            These will appear in the final quotation document/link
-          </p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-gray-500">
+              These will appear in the final quotation document/link
+            </p>
+            {formData.terms_conditions && (
+              <p className="text-xs text-blue-600">
+                {formData.terms_conditions.split('\n').filter(line => line.trim()).length} lines
+              </p>
+            )}
+          </div>
         </div>
 
         <div>
@@ -263,7 +303,12 @@ const QuotationStep2: React.FC<QuotationStep2Props> = ({ quotation, onNext, onBa
             <p>• Link Template: <strong>{linkTemplates.find(t => t.id === formData.link_template)?.name}</strong></p>
           )}
           <p>• Include Images: <strong>{formData.include_images ? 'Yes' : 'No'}</strong></p>
-          <p>• Terms & Conditions: <strong>{formData.terms_conditions ? 'Added' : 'None'}</strong></p>
+          <p>• Terms & Conditions: <strong>
+            {formData.terms_conditions ? 
+              (formData.terms_conditions === localStorage.getItem('terms_and_conditions') ? 'Default' : 'Custom') 
+              : 'None'
+            }
+          </strong></p>
           <p>• Internal Notes: <strong>{formData.notes ? 'Added' : 'None'}</strong></p>
         </div>
       </div>

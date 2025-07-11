@@ -55,13 +55,11 @@ export const uploadImage = async (file: File, filename: string): Promise<string 
       });
 
     if (error) {
-      console.error('Upload error:', error);
       return null;
     }
 
     return getImageUrl(filename);
   } catch (error) {
-    console.error('Upload failed:', error);
     return null;
   }
 };

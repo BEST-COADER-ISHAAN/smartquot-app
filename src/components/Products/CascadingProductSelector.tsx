@@ -3,6 +3,8 @@ import { ChevronDown, Package, Ruler, Layers, AlertCircle, CheckCircle, ArrowLef
 import { QuotationProduct } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { supabaseAdmin } from '../../lib/supabaseAdmin';
+import { formatSizeForDisplay } from '../../lib/sizeUtils';
+import { usePreferredSizeUnit } from '../../hooks/usePreferredSizeUnit';
 
 interface CascadingProductSelectorProps {
   onProductSelect: (product: QuotationProduct) => void;
@@ -50,6 +52,11 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
   // Auto-selection states
   const [autoSelectingSize, setAutoSelectingSize] = useState(false);
   const [autoSelectingSurface, setAutoSelectingSurface] = useState(false);
+
+  // State for formatted sizes
+  const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+
+  const { preferredSizeUnit } = usePreferredSizeUnit();
 
   // Load sizes when product is selected (including initial design name)
   useEffect(() => {
@@ -120,6 +127,34 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
       }, 800); // Slightly longer delay to show the user what's happening
     }
   }, [finalProducts, selectedProduct, selectedSize, selectedSurface]);
+
+  // Compute formattedSizes for all sizes in finalProducts
+  useEffect(() => {
+    async function computeFormattedSizes() {
+      const newFormatted: { [size: string]: string } = {};
+      for (const product of finalProducts) {
+        if (product.size && !newFormatted[product.size]) {
+          newFormatted[product.size] = await formatSizeForDisplay(product.size, preferredSizeUnit);
+        }
+      }
+      setFormattedSizes(newFormatted);
+    }
+    computeFormattedSizes();
+  }, [finalProducts, preferredSizeUnit]);
+
+  // Add a useEffect to compute formatted sizes for all sizeOptions
+  useEffect(() => {
+    async function computeFormattedSizesForOptions() {
+      const newFormatted: { [size: string]: string } = {};
+      for (const option of sizeOptions) {
+        if (option.size && !newFormatted[option.size]) {
+          newFormatted[option.size] = await formatSizeForDisplay(option.size, preferredSizeUnit);
+        }
+      }
+      setFormattedSizes((prev) => ({ ...prev, ...newFormatted }));
+    }
+    computeFormattedSizesForOptions();
+  }, [sizeOptions, preferredSizeUnit]);
 
   const loadSizeOptions = async (productName: string) => {
     setLoadingSizes(true);
@@ -232,8 +267,9 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
 
   const handleProductSelect = (product: QuotationProduct) => {
     onProductSelect(product);
+    if (onResetInitialSelection) onResetInitialSelection();
     // Reset all selections after successful selection
-    setSelectedProduct(initialDesignName || '');
+    setSelectedProduct('');
     setSelectedSize('');
     setSelectedSurface('');
     setSizeOptions([]);
@@ -354,7 +390,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
               </option>
               {sizeOptions.map((option) => (
                 <option key={option.size} value={option.size}>
-                  {option.size} ({option.count} variant{option.count !== 1 ? 's' : ''})
+                  {(formattedSizes[option.size] || option.size) + ` (${option.count} variant${option.count !== 1 ? 's' : ''})`}
                 </option>
               ))}
             </select>
@@ -480,7 +516,7 @@ const CascadingProductSelector: React.FC<CascadingProductSelectorProps> = ({
                         {product.name}
                       </div>
                       <div className="text-sm text-gray-600">
-                        {product.size} • {product.collection || 'No Collection'} • {product.surface || 'Standard'}
+                        {product.size ? (formattedSizes[product.size] || product.size) : ''} • {product.collection || 'No Collection'} • {product.surface || 'Standard'}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {product.actual_sqft_per_box.toFixed(2)} sqft/box • Weight: {product.weight.toFixed(2)} kg

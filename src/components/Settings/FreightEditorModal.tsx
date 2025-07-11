@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Package, Truck, Ruler } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { supabaseAdmin } from '../../lib/supabaseAdmin';
+import { useAuth } from '../../hooks/useAuth';
+import { getFreightSettings, upsertFreightSetting } from '../../lib/api';
 import { QuotationProduct } from '../../types';
 
 interface FreightEditorModalProps {
@@ -13,9 +13,7 @@ interface FreightEditorModalProps {
 interface FreightData {
   size: string;
   freight: number;
-  billed_sqft_per_box: number;
   product_count: number;
-  discount_percentage: number;
 }
 
 const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose, onSave }) => {
@@ -23,36 +21,47 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && user) {
       loadFreightData();
     }
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user]);
 
   const loadFreightData = async () => {
     setLoading(true);
     try {
-      const { data: products, error } = await supabaseAdmin
+      const { data: products, error } = await (await import('../../lib/supabase')).supabase
         .from('products')
-        .select('size, freight, billed_sqft_per_box')
+        .select('size, freight')
         .eq('is_archived', false)
         .order('size');
-
       if (error) throw error;
 
-      // Load discount mapping from localStorage
-      const discountMap = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
+      let freightSettings = [];
+      if (user) {
+        freightSettings = await getFreightSettings(user.id);
+      }
 
-      // Group by size and calculate averages
+      // If no freight settings in Supabase, migrate from localStorage if present (legacy)
+      if (freightSettings.length === 0 && user) {
+        const freightMap = JSON.parse(localStorage.getItem('freight_settings') || '{}');
+        for (const size of [...new Set(products.map((p: any) => p.size))]) {
+          await upsertFreightSetting(user.id, size, freightMap[size] || 0);
+        }
+        localStorage.removeItem('freight_settings');
+        freightSettings = await getFreightSettings(user.id);
+      }
+
       const sizeGroups = products.reduce((acc: Record<string, FreightData>, product) => {
         if (!acc[product.size]) {
+          const found = freightSettings.find((f: any) => f.size === product.size);
           acc[product.size] = {
             size: product.size,
-            freight: product.freight || 0,
-            billed_sqft_per_box: product.billed_sqft_per_box || 0,
-            product_count: 0,
-            discount_percentage: discountMap[product.size] || 0
+            freight: found ? found.freight : product.freight || 0,
+            product_count: 0
           };
         }
         acc[product.size].product_count++;
@@ -67,7 +76,7 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
     }
   };
 
-  const handleFreightChange = (size: string, field: 'freight' | 'billed_sqft_per_box' | 'discount_percentage', value: number) => {
+  const handleFreightChange = (size: string, field: 'freight', value: number) => {
     setFreightData(prev => 
       prev.map(item => 
         item.size === size 
@@ -80,27 +89,11 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Save discount mapping to localStorage
-      const discountMap: Record<string, number> = {};
-      for (const item of freightData) {
-        discountMap[item.size] = item.discount_percentage;
+      if (user) {
+        for (const item of freightData) {
+          await upsertFreightSetting(user.id, item.size, item.freight);
+        }
       }
-      localStorage.setItem('discount_percentages', JSON.stringify(discountMap));
-
-      // Update all products with the new freight and billed sqft values
-      for (const item of freightData) {
-        const { error } = await supabaseAdmin
-          .from('products')
-          .update({
-            freight: item.freight,
-            billed_sqft_per_box: item.billed_sqft_per_box
-          })
-          .eq('size', item.size)
-          .eq('is_archived', false);
-
-        if (error) throw error;
-      }
-
       onSave();
       onClose();
     } catch (error) {
@@ -127,8 +120,8 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
               <Truck className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg lg:text-xl font-semibold text-gray-800">Freight & Billed SQFT Editor</h2>
-              <p className="text-xs lg:text-sm text-gray-600">Edit freight costs and billed sqft for all product sizes</p>
+              <h2 className="text-lg lg:text-xl font-semibold text-gray-800">Freight Editor</h2>
+              <p className="text-xs lg:text-sm text-gray-600">Edit freight costs for all product sizes</p>
             </div>
           </div>
           <button
@@ -182,29 +175,6 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
                           min="0"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Billed SQFT/Box</label>
-                        <input
-                          type="number"
-                          value={item.billed_sqft_per_box}
-                          onChange={(e) => handleFreightChange(item.size, 'billed_sqft_per_box', parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          step="0.01"
-                          min="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Discount %</label>
-                        <input
-                          type="number"
-                          value={item.discount_percentage}
-                          onChange={(e) => handleFreightChange(item.size, 'discount_percentage', parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                        />
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -217,8 +187,6 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
                     <tr className="bg-gray-50">
                       <th className="text-left p-3 border border-gray-200 font-medium text-gray-700">Size</th>
                       <th className="text-left p-3 border border-gray-200 font-medium text-gray-700">Freight (₹)</th>
-                      <th className="text-left p-3 border border-gray-200 font-medium text-gray-700">Billed SQFT/Box</th>
-                      <th className="text-left p-3 border border-gray-200 font-medium text-gray-700">Discount %</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -238,27 +206,6 @@ const FreightEditorModal: React.FC<FreightEditorModalProps> = ({ isOpen, onClose
                             className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             step="0.01"
                             min="0"
-                          />
-                        </td>
-                        <td className="p-3 border border-gray-200">
-                          <input
-                            type="number"
-                            value={item.billed_sqft_per_box}
-                            onChange={(e) => handleFreightChange(item.size, 'billed_sqft_per_box', parseFloat(e.target.value) || 0)}
-                            className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            step="0.01"
-                            min="0"
-                          />
-                        </td>
-                        <td className="p-3 border border-gray-200">
-                          <input
-                            type="number"
-                            value={item.discount_percentage}
-                            onChange={(e) => handleFreightChange(item.size, 'discount_percentage', parseFloat(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                            step="0.01"
-                            min="0"
-                            max="100"
                           />
                         </td>
                       </tr>

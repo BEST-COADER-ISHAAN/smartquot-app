@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building, Mail, Phone, MapPin, Calendar, FileText, Package, Download, Copy, Check, User } from 'lucide-react';
 import { Quotation } from '../../../types';
+import { formatSizeForDisplay } from '../../../lib/sizeUtils';
+import { getQuotationCompanyDetailsAsync } from '../../../lib/companyUtils';
+import OnlineQuotationComponent from '@/components/ui/OnlineQuotationComponent';
+import { usePreferredSizeUnit } from '../../../hooks/usePreferredSizeUnit';
 
 interface LinkPrintTemplateProps {
   quotation: Quotation;
@@ -8,12 +12,14 @@ interface LinkPrintTemplateProps {
 
 const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
   const [copied, setCopied] = useState(false);
+  const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+  const { preferredSizeUnit } = usePreferredSizeUnit();
 
-  // Company info from localStorage
-  const companyName = typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'Your Company Name' : 'Your Company Name';
-  const companyAddress = typeof window !== 'undefined' ? localStorage.getItem('company_address') || 'Your Company Address' : 'Your Company Address';
-  const companyPhone = typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-0000000000' : '+91-0000000000';
-  const companyEmail = typeof window !== 'undefined' ? localStorage.getItem('company_email') || 'info@yourcompany.com' : 'info@yourcompany.com';
+  // TODO: Replace with Supabase-based company info fetch
+  const companyName = 'Your Company Name';
+  const companyAddress = 'Your Company Address';
+  const companyPhone = '+91-0000000000';
+  const companyEmail = 'info@yourcompany.com';
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-IN', {
@@ -65,6 +71,96 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
 
   const columnCount = getColumnCount();
 
+  async function mapQuotationToQuotationData(quotation: Quotation, preferredSizeUnit: 'inches' | 'mm' | 'feet' | 'custom') {
+    // Get current company details with preferences
+    const companyDetails = await getQuotationCompanyDetailsAsync();
+    const includeImages = !!quotation.include_images;
+    let rooms: any[] = [];
+    let items: any[] = [];
+    if (quotation.rooms) {
+      rooms = await Promise.all(quotation.rooms.map(async (room: any) => ({
+        room_name: room.room_name,
+        items: await Promise.all((room.items || []).map(async (item: any) => ({
+          id: item.id || 'N/A',
+          description: item.product?.name || 'Product',
+          size: item.product?.size ? await formatSizeForDisplay(item.product.size, preferredSizeUnit) : '',
+          surface: item.product?.surface || '',
+          actualSqftPerBox: item.product?.actual_sqft_per_box || 0,
+          billedSqftPerBox: item.product?.billed_sqft_per_box || 0,
+          sqftNeeded: item.sqft_needed || 0,
+          boxNeeded: item.box_needed || 0,
+          quantity: item.quantity_boxes || 1,
+          unitPrice: item.rate_per_sqft || 0,
+          pricePerBox: item.mrp_per_box || 0,
+          total: item.amount || 0,
+          margin: item.margin_amount || 0,
+          marginPercentage: item.margin_percentage || 0,
+          imageUrl: item.product?.image_url || '',
+        }))),
+        room_total: room.room_total || 0,
+      })));
+      items = (rooms ?? []).flatMap((r: any) => r.items);
+    }
+
+    return {
+      id: quotation.id || 'N/A',
+      quotationNumber: quotation.quotation_number || 'N/A',
+      date: quotation.created_at?.split('T')[0] || '2024-01-01',
+      validUntil: quotation.updated_at?.split('T')[0] || '2024-12-31',
+      status: (quotation.status as 'draft' | 'sent' | 'approved' | 'rejected') || 'draft',
+      companyLogo: companyDetails.logo || '',
+      companyName: companyDetails.companyName || 'Your Company Name',
+      companyAddress: companyDetails.companyAddress || 'Your Company Address',
+      companyPhone: companyDetails.companyPhone || '+91-0000000000',
+      companyEmail: companyDetails.companyEmail || 'info@yourcompany.com',
+      clientName: quotation.customer?.name || 'Client Name',
+      clientCompany: '',
+      clientAddress: quotation.customer?.site_address || 'Client Address',
+      clientPhone: quotation.customer?.phone || '+91-0000000000',
+      clientEmail: quotation.customer?.email || 'client@email.com',
+      items,
+      rooms,
+      isAreaWise: !!quotation.is_area_wise,
+      notes: quotation.notes || '',
+      terms: quotation.terms_conditions || '',
+      subtotal: quotation.total_amount || 0,
+      taxRate: 0,
+      taxAmount: 0,
+      totalAmount: quotation.total_amount || 0,
+      attachments: [],
+      sqftInBoxType: quotation.sqft_in_box_type || 'billed',
+      showSqftInBox: !!quotation.show_sqft_in_box,
+      showSqftNeeded: !!quotation.show_sqft_needed,
+      showBoxNeeded: !!quotation.show_box_needed,
+      showPricePerSqft: !!quotation.show_price_per_sqft,
+      showPricePerBox: !!quotation.show_price_per_box,
+      showAmount: !!quotation.show_amount,
+      showMargin: !!quotation.show_margin,
+      includeImages,
+    };
+  }
+
+  const [quotationData, setQuotationData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    mapQuotationToQuotationData(quotation, preferredSizeUnit)
+      .then((result) => {
+        setQuotationData(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Could not load company details.');
+        setLoading(false);
+      });
+  }, [quotation, preferredSizeUnit]);
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
+  if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
+  if (!quotationData) return <div className="p-8 text-center text-red-600">No company details found.</div>;
+
   return (
     <div className="min-h-screen bg-white p-0">
       <div className="w-[95vw] max-w-[95vw] mx-auto">
@@ -112,11 +208,11 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
           {/* Company Info */}
           <div className="flex-1 border border-gray-300 rounded-lg p-4 print:border-2 print:p-3 bg-gray-50">
             <div className="flex items-center gap-2 mb-2 font-bold text-blue-700"><Building className="w-5 h-5 text-blue-400" />From:</div>
-            <div className="font-semibold text-gray-800">{companyName}</div>
-            <div className="text-sm text-gray-600 whitespace-pre-line">{companyAddress}</div>
+            <div className="font-semibold text-gray-800">{quotationData.companyName}</div>
+            <div className="text-sm text-gray-600 whitespace-pre-line">{quotationData.companyAddress}</div>
             <div className="flex flex-col gap-1 mt-2 text-xs text-gray-500">
-              {companyPhone && <span>📞 {companyPhone}</span>}
-              {companyEmail && <span>✉️ {companyEmail}</span>}
+              {quotationData.companyPhone && <span>📞 {quotationData.companyPhone}</span>}
+              {quotationData.companyEmail && <span>✉️ {quotationData.companyEmail}</span>}
             </div>
           </div>
           {/* Customer Info */}
@@ -202,7 +298,7 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
                               </div>
                             </td>
                             <td className="border border-gray-300 px-4 py-2 text-xs break-words">
-                              {item.product?.size || '-'}
+                              {item.product?.size ? formattedSizes[item.product.size] || item.product.size : '-'}
                             </td>
                             <td className="border border-gray-300 px-4 py-2 text-xs break-words">
                               {item.product?.surface || 'Standard'}
@@ -300,7 +396,7 @@ const LinkPrintTemplate: React.FC<LinkPrintTemplateProps> = ({ quotation }) => {
                       style={{ maxWidth: 96, maxHeight: 96 }}
                     />
                     <div className="text-xs font-medium text-center truncate w-full" title={item.product?.name}>{item.product?.name}</div>
-                    <div className="text-xs text-muted-foreground text-center">{item.product?.size}</div>
+                    <div className="text-xs text-muted-foreground text-center">{item.product?.size ? formattedSizes[item.product.size] || item.product.size : ''}</div>
                   </div>
                 ))}
             </div>

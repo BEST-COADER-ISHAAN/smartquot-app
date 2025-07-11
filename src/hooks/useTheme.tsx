@@ -10,15 +10,13 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }): React.ReactElement => {
   const getInitialTheme = (): Theme => {
-    const saved = localStorage.getItem('selected_theme');
-    const found = themes.find(t => t.id === saved);
-    return found || themes[0];
+    // TODO: Replace with Supabase-based theme fetch and save
+    return themes[0];
   };
 
   const [theme, setTheme] = useState<Theme>(getInitialTheme());
 
   useEffect(() => {
-    localStorage.setItem('selected_theme', theme.id);
     const root = document.documentElement;
     root.style.setProperty('--primary-color', theme.primaryColor);
     root.style.setProperty('--secondary-color', theme.secondaryColor);

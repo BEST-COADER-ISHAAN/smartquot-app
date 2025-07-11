@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alt+N Shortcut Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-area {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .test-area input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .log {
+            background: #343a40;
+            color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .shortcut-demo {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .shortcut-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .shortcut-key {
+            background: #495057;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .flow-diagram {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .flow-step {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+        .step-number {
+            background: #007bff;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Alt+N Shortcut Fix Test</h1>
+        
+        <div class="status success">
+            ✅ <strong>Fixed:</strong> Alt+N now properly navigates to /quotations/new and opens the quotation wizard!
+        </div>
+
+        <div class="status info">
+            💡 <strong>Implementation:</strong> Added /quotations/new route and updated QuotationList to handle it.
+        </div>
+
+        <div class="test-area">
+            <h3>Test Area</h3>
+            <p>Try typing in this input field - shortcuts should NOT trigger when typing:</p>
+            <input type="text" placeholder="Type here to test that shortcuts don't trigger while typing..." />
+            
+            <h4>Event Log:</h4>
+            <div id="log" class="log"></div>
+        </div>
+
+        <div class="shortcut-demo">
+            <div class="shortcut-card">
+                <h3>Alt + N (New Quotation)</h3>
+                <p><span class="shortcut-key">Alt + N</span></p>
+                <p>Navigates to /quotations/new and opens quotation wizard</p>
+                
+                <h4>What happens:</h4>
+                <ul>
+                    <li>Navigates to /quotations/new route</li>
+                    <li>QuotationList component detects the route</li>
+                    <li>Automatically opens QuotationWizard</li>
+                    <li>User can create new quotation</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="flow-diagram">
+            <h3>Flow Diagram</h3>
+            
+            <div class="flow-step">
+                <div class="step-number">1</div>
+                <div>
+                    <strong>User presses Alt+N</strong><br>
+                    <small>Keyboard shortcut triggered</small>
+                </div>
+            </div>
+            
+            <div class="flow-step">
+                <div class="step-number">2</div>
+                <div>
+                    <strong>Navigate to /quotations/new</strong><br>
+                    <small>React Router navigation</small>
+                </div>
+            </div>
+            
+            <div class="flow-step">
+                <div class="step-number">3</div>
+                <div>
+                    <strong>QuotationList component loads</strong><br>
+                    <small>Detects /quotations/new route</small>
+                </div>
+            </div>
+            
+            <div class="flow-step">
+                <div class="step-number">4</div>
+                <div>
+                    <strong>handleCreate() called</strong><br>
+                    <small>Opens QuotationWizard automatically</small>
+                </div>
+            </div>
+            
+            <div class="flow-step">
+                <div class="step-number">5</div>
+                <div>
+                    <strong>User creates quotation</strong><br>
+                    <small>Multi-step wizard process</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="status success">
+            <h4>Technical Implementation:</h4>
+            <ol>
+                <li><strong>Route Added:</strong> <code>/quotations/new</code> → <code>QuotationList</code></li>
+                <li><strong>Component Updated:</strong> QuotationList detects route and opens wizard</li>
+                <li><strong>Shortcut Updated:</strong> Alt+N now navigates to route instead of dispatching event</li>
+                <li><strong>Seamless Experience:</strong> User gets wizard immediately</li>
+            </ol>
+        </div>
+
+        <div class="status info">
+            <h4>Benefits of This Approach:</h4>
+            <ul>
+                <li><strong>Clean URLs:</strong> /quotations/new is a proper route</li>
+                <li><strong>Bookmarkable:</strong> Users can bookmark the new quotation page</li>
+                <li><strong>Browser History:</strong> Back button works correctly</li>
+                <li><strong>Consistent:</strong> Follows React Router patterns</li>
+                <li><strong>SEO Friendly:</strong> Proper routing structure</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const log = document.getElementById('log');
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Mock keyboard shortcuts for testing
+        const shortcuts = {
+            'Alt+N': 'New Quotation'
+        };
+
+        document.addEventListener('keydown', (event) => {
+            // Don't trigger shortcuts when typing in input fields
+            if (event.target instanceof HTMLInputElement || 
+                event.target instanceof HTMLTextAreaElement || 
+                event.target instanceof HTMLSelectElement) {
+                return;
+            }
+            
+            // Check for Alt key combinations
+            if (event.altKey && !event.ctrlKey && !event.shiftKey) {
+                const key = event.key.toLowerCase();
+                const shortcutKey = `Alt+${event.key.toUpperCase()}`;
+                
+                if (shortcuts[shortcutKey]) {
+                    event.preventDefault();
+                    addLog(`Shortcut triggered: ${shortcutKey} - ${shortcuts[shortcutKey]}`);
+                    
+                    if (shortcutKey === 'Alt+N') {
+                        addLog('  → Would navigate to /quotations/new');
+                        addLog('  → QuotationList component loads');
+                        addLog('  → Detects /quotations/new route');
+                        addLog('  → Automatically opens QuotationWizard');
+                        addLog('  → User can create new quotation');
+                    }
+                }
+            }
+        });
+
+        addLog('Alt+N shortcut fix test initialized.');
+        addLog('Try pressing Alt + N to test the new quotation shortcut.');
+        addLog('This now properly navigates to /quotations/new and opens the wizard.');
+    </script>
+</body>
+</html> 

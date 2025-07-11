@@ -281,6 +281,168 @@ export interface Database {
           price_per_box_override?: number | null;
         };
       };
+      user_settings: {
+        Row: {
+          user_id: string;
+          preferred_size_unit: string | null;
+          terms_and_conditions: string | null;
+          theme: string | null;
+          company_name: string | null;
+          company_address: string | null;
+          company_phone: string | null;
+          company_email: string | null;
+          gst_no: string | null;
+          logo: string | null;
+          include_company_name: boolean | null;
+          include_address: boolean | null;
+          include_phone: boolean | null;
+          include_email: boolean | null;
+          include_gst: boolean | null;
+          include_logo: boolean | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          preferred_size_unit?: string | null;
+          terms_and_conditions?: string | null;
+          theme?: string | null;
+          company_name?: string | null;
+          company_address?: string | null;
+          company_phone?: string | null;
+          company_email?: string | null;
+          gst_no?: string | null;
+          logo?: string | null;
+          include_company_name?: boolean | null;
+          include_address?: boolean | null;
+          include_phone?: boolean | null;
+          include_email?: boolean | null;
+          include_gst?: boolean | null;
+          include_logo?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          preferred_size_unit?: string | null;
+          terms_and_conditions?: string | null;
+          theme?: string | null;
+          company_name?: string | null;
+          company_address?: string | null;
+          company_phone?: string | null;
+          company_email?: string | null;
+          gst_no?: string | null;
+          logo?: string | null;
+          include_company_name?: boolean | null;
+          include_address?: boolean | null;
+          include_phone?: boolean | null;
+          include_email?: boolean | null;
+          include_gst?: boolean | null;
+          include_logo?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      size_format_mappings: {
+        Row: {
+          user_id: string;
+          size: string;
+          mm_format: string | null;
+          inch_format: string | null;
+          feet_format: string | null;
+          custom_format: string | null;
+        };
+        Insert: {
+          user_id: string;
+          size: string;
+          mm_format?: string | null;
+          inch_format?: string | null;
+          feet_format?: string | null;
+          custom_format?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          size?: string;
+          mm_format?: string | null;
+          inch_format?: string | null;
+          feet_format?: string | null;
+          custom_format?: string | null;
+        };
+      };
+      billing_types: {
+        Row: {
+          user_id: string;
+          size: string;
+          billing_type: string | null;
+        };
+        Insert: {
+          user_id: string;
+          size: string;
+          billing_type?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          size?: string;
+          billing_type?: string | null;
+        };
+      };
+      discounts: {
+        Row: {
+          user_id: string;
+          size: string;
+          company_discount: number | null;
+          customer_discount: number | null;
+        };
+        Insert: {
+          user_id: string;
+          size: string;
+          company_discount?: number | null;
+          customer_discount?: number | null;
+        };
+        Update: {
+          user_id?: string;
+          size?: string;
+          company_discount?: number | null;
+          customer_discount?: number | null;
+        };
+      };
+      freight_settings: {
+        Row: {
+          user_id: string;
+          size: string;
+          freight: number | null;
+        };
+        Insert: {
+          user_id: string;
+          size: string;
+          freight?: number | null;
+        };
+        Update: {
+          user_id?: string;
+          size?: string;
+          freight?: number | null;
+        };
+      };
+      billed_sqft_settings: {
+        Row: {
+          user_id: string;
+          size: string;
+          actual_sqft_per_box: number | null;
+          billed_sqft_per_box: number | null;
+        };
+        Insert: {
+          user_id: string;
+          size: string;
+          actual_sqft_per_box?: number | null;
+          billed_sqft_per_box?: number | null;
+        };
+        Update: {
+          user_id?: string;
+          size?: string;
+          actual_sqft_per_box?: number | null;
+          billed_sqft_per_box?: number | null;
+        };
+      };
     };
   };
 }

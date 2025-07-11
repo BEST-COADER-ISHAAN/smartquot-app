@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Plus, Trash2, Search, User, Building, MapPin, Phone, Mail, Package, Calculator, Eye, EyeOff, ChevronDown, ChevronUp, Loader, TrendingUp, Weight, Box, DollarSign } from 'lucide-react';
+import { ArrowRight, Plus, Trash2, Search, User, Building, MapPin, Phone, Mail, Package, Calculator, Eye, EyeOff, ChevronDown, ChevronUp, Loader, TrendingUp, Weight, Box, IndianRupee, Percent, Filter, Edit, X, Save, Check, AlertCircle, Info, Settings, Ruler, Layers, Truck, Image as ImageIcon, Download } from 'lucide-react';
 import { Quotation, QuotationCustomer, QuotationProduct } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { supabaseAdmin } from '../../lib/supabaseAdmin';
 import { useDebounce } from '../../hooks/useDebounce';
+import { formatSizeForDisplay } from '../../lib/sizeUtils';
+import { usePreferredSizeUnit } from '../../hooks/usePreferredSizeUnit';
 import CascadingProductSelector from '../Products/CascadingProductSelector';
 import { useAuth } from '../../hooks/useAuth';
+import { getBillingTypeForSize, formatBillingDisplay, formatPriceDisplay, getSqftValue, getPriceValue, getColumnHeader } from '../../lib/billingUtils';
 
 interface QuotationStep1Props {
   quotation: Partial<Quotation>;
@@ -15,8 +18,6 @@ interface QuotationStep1Props {
 
 const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCancel }) => {
   const { user, session } = useAuth();
-  console.log('Current user:', user);
-  console.log('Current session:', session);
   const [customers, setCustomers] = useState<QuotationCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [productSearch, setProductSearch] = useState('');
@@ -27,11 +28,33 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
   const [selectedDesignNameForGuidedSelection, setSelectedDesignNameForGuidedSelection] = useState<string | null>(null);
   const [isColumnVisibilityExpanded, setIsColumnVisibilityExpanded] = useState(false);
   
-  // Settings from Settings page (hardcoded for now)
-  const [settings] = useState({
+  // Settings from Settings page - load from localStorage
+  const [settings, setSettings] = useState({
     companyDiscount: 5, // Default company discount percentage
     freightPerSqft: 2.5, // Default freight cost per sqft
   });
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        // Load discount percentages from localStorage
+        const discountMap = JSON.parse(localStorage.getItem('discount_percentages') || '{}');
+        
+        // For now, use the first available discount or default to 5%
+        const firstDiscount = Object.values(discountMap)[0] as number || 5;
+        
+        setSettings(prev => ({
+          ...prev,
+          companyDiscount: firstDiscount
+        }));
+      } catch (error) {
+        // console.error('Error loading settings:', error);
+      }
+    };
+
+    loadSettings();
+  }, []);
   
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -64,6 +87,8 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     show_price_per_box: quotation?.show_price_per_box || false,
     show_amount: quotation?.show_amount || false,
     show_margin: quotation?.show_margin || false,
+    local_freight: quotation?.local_freight || 0,
+    unloading: quotation?.unloading || 0,
   });
 
   useEffect(() => {
@@ -124,7 +149,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
       setCustomers(customersData || []);
 
     } catch (error) {
-      console.error('Error loading data:', error);
+      // console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -154,7 +179,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
       setShowProductDropdown(true);
       setSelectedProductIndex(-1);
     } catch (error) {
-      console.error('Error searching design names:', error);
+      // console.error('Error searching design names:', error);
       setFilteredDesignNames([]);
     } finally {
       setSearchLoading(false);
@@ -245,13 +270,18 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     const sellingPricePerBox = item.mrp_per_box;
     const totalSellingPrice = quantity * sellingPricePerBox;
 
+    // Get freight and discount for this product's size
+    const discountMap = {};
+    const productDiscount = discountMap[product.size] || settings.companyDiscount;
+    const productFreight = product.freight || settings.freightPerSqft;
+
     // Calculate cost breakdown per sqft
     const exFactoryPerSqft = product.ex_factory_price;
-    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - settings.companyDiscount / 100);
+    const exFactoryAfterCompanyDiscount = exFactoryPerSqft * (1 - productDiscount / 100);
     const insuranceCostPerSqft = exFactoryAfterCompanyDiscount * (product.insurance_percentage / 100);
     const baseForGst = exFactoryAfterCompanyDiscount + insuranceCostPerSqft;
     const gstCostPerSqft = baseForGst * (product.gst_percentage / 100);
-    const freightCostPerSqft = settings.freightPerSqft;
+    const freightCostPerSqft = productFreight;
     
     const totalCostPerSqft = exFactoryAfterCompanyDiscount + insuranceCostPerSqft + gstCostPerSqft + freightCostPerSqft;
     
@@ -371,7 +401,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
       ...updatedRooms[roomIndex],
       items: updatedRooms[roomIndex].items.filter((_, index) => index !== itemIndex)
     };
-    setFormData(prev => ({ ...prev, rooms: updatedRooms }));
+    setFormData(prev => ({ ...prev, rooms: recalculateRoomTotals(updatedRooms) }));
   };
 
   const updateItemQuantity = (roomIndex: number, itemIndex: number, quantity: number) => {
@@ -399,29 +429,25 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
   const updateItemSqftNeeded = (roomIndex: number, itemIndex: number, sqftNeeded: number) => {
     const updatedRooms = [...formData.rooms];
     const item = updatedRooms[roomIndex].items[itemIndex];
-    
     if (!item.product) return;
-    
     const sqftInBox = formData.sqft_in_box_type === 'actual' 
       ? item.product.actual_sqft_per_box 
       : item.product.billed_sqft_per_box;
-    
+    // Only update quantity if user is editing SQFT Needed
     const calculatedQuantity = calculateQuantityFromSqft(sqftNeeded, sqftInBox);
     const newAmount = calculatedQuantity * item.mrp_per_box;
-    
     updatedRooms[roomIndex].items[itemIndex] = {
       ...item,
       sqft_needed: sqftNeeded,
-      quantity_boxes: calculatedQuantity,
+      // Only update quantity if it was previously set by SQFT Needed or is 1
+      quantity_boxes: item.sqft_needed !== undefined ? calculatedQuantity : item.quantity_boxes,
       amount: newAmount,
       box_needed: item.box_needed ?? 0
     };
-
     // Recalculate margin
     const margin = calculateItemMargin(updatedRooms[roomIndex].items[itemIndex]);
     updatedRooms[roomIndex].items[itemIndex].margin_amount = margin.marginAmount;
     updatedRooms[roomIndex].items[itemIndex].margin_percentage = margin.marginPercentage;
-    
     setFormData(prev => ({ ...prev, rooms: recalculateRoomTotals(updatedRooms) }));
   };
 
@@ -456,6 +482,34 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     setFormData(prev => ({ ...prev, rooms: recalculateRoomTotals(updatedRooms) }));
   };
 
+  const updateItemPricePerSqft = (roomIndex: number, itemIndex: number, pricePerSqft: number) => {
+    const updatedRooms = [...formData.rooms];
+    const item = updatedRooms[roomIndex].items[itemIndex];
+    
+    if (!item.product) return;
+    
+    const sqftInBox = formData.sqft_in_box_type === 'actual' 
+      ? item.product.actual_sqft_per_box 
+      : item.product.billed_sqft_per_box;
+    const pricePerBox = calculatePricePerBox(pricePerSqft, sqftInBox);
+    const newAmount = item.quantity_boxes * pricePerBox;
+    
+    updatedRooms[roomIndex].items[itemIndex] = {
+      ...item,
+      rate_per_sqft: pricePerSqft,
+      mrp_per_box: pricePerBox,
+      amount: newAmount,
+      box_needed: item.box_needed ?? 0
+    };
+
+    // Recalculate margin
+    const margin = calculateItemMargin(updatedRooms[roomIndex].items[itemIndex]);
+    updatedRooms[roomIndex].items[itemIndex].margin_amount = margin.marginAmount;
+    updatedRooms[roomIndex].items[itemIndex].margin_percentage = margin.marginPercentage;
+    
+    setFormData(prev => ({ ...prev, rooms: recalculateRoomTotals(updatedRooms) }));
+  };
+
   const calculateTotals = () => {
     let totalAmount = 0;
     let totalMarginAmount = 0;
@@ -469,7 +523,6 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
         totalMarginAmount += item.margin_amount || 0;
         totalProducts += 1;
         totalBoxes += item.quantity_boxes || 0;
-        
         // Calculate weight (weight per box * quantity)
         if (item.product) {
           totalWeight += (item.product.weight || 0) * (item.quantity_boxes || 0);
@@ -477,15 +530,22 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
       });
     });
 
+    // Add local freight and unloading to totalAmount (not margin)
+    const localFreight = Number(formData.local_freight) || 0;
+    const unloading = Number(formData.unloading) || 0;
+    const totalWithExtras = totalAmount + localFreight + unloading;
+
     const totalMarginPercentage = totalAmount > 0 ? (totalMarginAmount / totalAmount) * 100 : 0;
 
     return {
-      total_amount: totalAmount,
+      total_amount: totalWithExtras,
       total_margin_amount: totalMarginAmount,
       total_margin_percentage: totalMarginPercentage,
       total_products: totalProducts,
       total_boxes: totalBoxes,
-      total_weight: totalWeight
+      total_weight: totalWeight,
+      local_freight: localFreight,
+      unloading: unloading,
     };
   };
 
@@ -505,15 +565,30 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
   };
 
   const getVisibleColumnsPreview = () => {
-    const columns = [];
-    columns.push('Name', 'Size', 'Surface'); // Always visible
-    if (formData.show_sqft_in_box) columns.push(`SQFT in Box (${formData.sqft_in_box_type})`);
-    if (formData.show_sqft_needed) columns.push('SQFT Needed');
-    if (formData.show_box_needed) columns.push('Quantity');
-    if (formData.show_price_per_sqft) columns.push('Price/SQFT');
-    if (formData.show_price_per_box) columns.push('Price/Box');
-    if (formData.show_amount) columns.push('Amount');
-    if (formData.show_margin) columns.push('Margin');
+    const columns = ['Name', 'Size', 'Surface'];
+    
+    if (formData.show_sqft_in_box) {
+      columns.push('SQFT in Box');
+    }
+    if (formData.show_sqft_needed) {
+      columns.push('SQFT Needed');
+    }
+    columns.push('Quantity');
+    columns.push('Discount (%)');
+    if (formData.show_price_per_sqft) {
+      columns.push('Price/SQFT');
+    }
+    if (formData.show_price_per_box) {
+      columns.push('Price/Box');
+    }
+    if (formData.show_amount) {
+      columns.push('Amount');
+    }
+    if (formData.show_margin) {
+      columns.push('Margin');
+    }
+    columns.push('Actions');
+    
     return columns;
   };
 
@@ -548,6 +623,141 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
     updatedRooms[toRoomIdx].items.push(item);
     setFormData(prev => ({ ...prev, rooms: recalculateRoomTotals(updatedRooms) }));
   };
+
+  // Add state for billing types
+  const [billingTypeMap, setBillingTypeMap] = useState<Record<string, string>>({});
+  const [billingTypeLoading, setBillingTypeLoading] = useState(false);
+
+  // Fetch billing types for all unique product sizes in the quotation
+  useEffect(() => {
+    const fetchBillingTypes = async () => {
+      setBillingTypeLoading(true);
+      const sizes = Array.from(new Set(
+        formData.rooms.flatMap(room => room.items.map(item => item.product?.size).filter(Boolean))
+      ));
+      const map: Record<string, string> = {};
+      for (const size of sizes) {
+        if (size && user?.id) {
+          map[size] = await getBillingTypeForSize(user.id, size);
+        }
+      }
+      setBillingTypeMap(map);
+      setBillingTypeLoading(false);
+    };
+    fetchBillingTypes();
+  }, [formData.rooms]);
+
+  // Add state for billed sqft map
+  const [billedSqftMap, setBilledSqftMap] = useState<{ [size: string]: number }>({});
+  const [billedSqftLoaded, setBilledSqftLoaded] = useState(false);
+
+  // Fetch billed sqft settings for all unique sizes in the quotation
+  useEffect(() => {
+    async function fetchBilledSqftSettings() {
+      if (!user?.id) return;
+      const sizes = Array.from(new Set(
+        formData.rooms.flatMap(room => room.items.map(item => item.product?.size).filter(Boolean))
+      ));
+      if (sizes.length === 0) return;
+      const { data, error } = await supabase
+        .from('billed_sqft_settings')
+        .select('size, billed_sqft_per_box')
+        .eq('user_id', user.id)
+        .in('size', sizes);
+      if (error) {
+        // console.error('Failed to fetch billed sqft settings:', error);
+        return;
+      }
+      const map: { [size: string]: number } = {};
+      for (const row of data || []) {
+        map[String(row.size)] = row.billed_sqft_per_box;
+      }
+      // console.log('Billed SQFT Map updated:', map);
+      setBilledSqftMap(map);
+      setBilledSqftLoaded(true);
+    }
+    fetchBilledSqftSettings();
+  }, [formData.rooms, user?.id]);
+
+  // Add useEffect to recalculate all items when sqft_in_box_type or billedSqftMap changes
+  useEffect(() => {
+    if (formData.rooms.length === 0) return;
+    
+    // console.log('Recalculating items. SQFT type:', formData.sqft_in_box_type, 'Billed map:', billedSqftMap);
+    
+    const updatedRooms = formData.rooms.map(room => ({
+      ...room,
+      items: room.items.map(item => {
+        if (!item.product) return item;
+        
+        // Get the correct SQFT in Box value
+        const sqftInBox = formData.sqft_in_box_type === 'actual' 
+          ? item.product.actual_sqft_per_box 
+          : billedSqftMap[String(item.product.size)];
+        
+        // console.log(`Item ${item.product.name} (${item.product.size}):`, {
+        //   sqftType: formData.sqft_in_box_type,
+        //   actualSqft: item.product.actual_sqft_per_box,
+        //   billedSqft: billedSqftMap[String(item.product.size)],
+        //   usedSqft: sqftInBox
+        // });
+        
+        if (typeof sqftInBox !== 'number' || sqftInBox <= 0) return item;
+        
+        // Recalculate quantity if sqft_needed is set
+        let newQuantity = item.quantity_boxes;
+        if (typeof item.sqft_needed === 'number' && item.sqft_needed > 0) {
+          newQuantity = Math.ceil(item.sqft_needed / sqftInBox);
+        }
+        
+        // Recalculate price per box
+        const newPricePerBox = (item.rate_per_sqft || 0) * sqftInBox;
+        
+        // Recalculate amount
+        const newAmount = newQuantity * newPricePerBox;
+        
+        // Recalculate margin
+        const margin = calculateItemMargin({
+          ...item,
+          quantity_boxes: newQuantity,
+          mrp_per_box: newPricePerBox,
+          amount: newAmount
+        });
+        
+        return {
+          ...item,
+          quantity_boxes: newQuantity,
+          mrp_per_box: newPricePerBox,
+          amount: newAmount,
+          margin_amount: margin.marginAmount,
+          margin_percentage: margin.marginPercentage
+        };
+      })
+    }));
+    
+    // Recalculate room totals
+    const recalculatedRooms = recalculateRoomTotals(updatedRooms);
+    
+    setFormData(prev => ({
+      ...prev,
+      rooms: recalculatedRooms
+    }));
+  }, [formData.sqft_in_box_type, billedSqftMap, billedSqftLoaded]);
+
+  const { preferredSizeUnit } = usePreferredSizeUnit();
+  const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+  useEffect(() => {
+    async function fetchFormattedSizes() {
+      const newFormatted: { [size: string]: string } = {};
+      for (const item of formData.rooms.flatMap(room => room.items)) {
+        if (item.product?.size) {
+          newFormatted[String(item.product.size)] = await formatSizeForDisplay(item.product.size, preferredSizeUnit);
+        }
+      }
+      setFormattedSizes(newFormatted);
+    }
+    fetchFormattedSizes();
+  }, [formData.rooms, preferredSizeUnit]);
 
   if (loading) {
     return (
@@ -995,12 +1205,16 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
                           </th>
                         )}
                         {formData.show_sqft_needed && (
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SQFT Needed</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {room.items[0]?.product?.size ? getColumnHeader('SQFT Needed', (billingTypeMap[String(room.items[0].product.size)] as 'per_sqft' | 'per_piece') || 'per_sqft') : 'SQFT Needed'}
+                          </th>
                         )}
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount (%)</th>
                         {formData.show_price_per_sqft && (
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price/SQFT</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Price per SQFT
+                          </th>
                         )}
                         {formData.show_price_per_box && (
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price/Box</th>
@@ -1017,22 +1231,23 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
                     <tbody className="bg-white divide-y divide-gray-200">
                       {room.items.map((item, itemIndex) => (
                         <tr key={itemIndex} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.name || item.name}</td>
-                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.size}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.name || item.name || '-'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{item.product?.size ? formattedSizes[String(item.product.size)] || item.product.size : '-'}</td>
                           <td className="px-4 py-2 text-sm text-gray-900">{item.product?.surface || '-'}</td>
                           {formData.show_sqft_in_box && (
                             <td className="px-4 py-2 text-sm text-gray-900">
-                              {formData.sqft_in_box_type === 'actual' 
-                                ? item.product?.actual_sqft_per_box.toFixed(2)
-                                : item.product?.billed_sqft_per_box.toFixed(2)
-                              }
+                              {item.product && typeof item.product.actual_sqft_per_box === 'number' && formData.sqft_in_box_type
+                                ? (formData.sqft_in_box_type === 'actual'
+                                    ? item.product.actual_sqft_per_box
+                                    : billedSqftMap[String(item.product.size)] ?? '-')
+                                : '-'}
                             </td>
                           )}
                           {formData.show_sqft_needed && (
-                            <td className="px-4 py-2">
+                            <td className="px-4 py-2 text-sm text-gray-900">
                               <input
                                 type="number"
-                                value={item.sqft_needed}
+                                value={item.sqft_needed !== undefined ? item.sqft_needed : ''}
                                 onChange={(e) => updateItemSqftNeeded(roomIndex, itemIndex, parseFloat(e.target.value) || 0)}
                                 className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 min="0"
@@ -1040,11 +1255,11 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
                               />
                             </td>
                           )}
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-2 text-sm text-gray-900">
                             <input
                               type="number"
-                              value={item.quantity_boxes}
-                              onChange={(e) => updateItemQuantity(roomIndex, itemIndex, parseFloat(e.target.value) || 1)}
+                              value={item.quantity_boxes !== undefined ? item.quantity_boxes : ''}
+                              onChange={(e) => updateItemQuantity(roomIndex, itemIndex, parseInt(e.target.value) || 1)}
                               className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               min="1"
                               step="1"
@@ -1062,19 +1277,29 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
                             />
                           </td>
                           {formData.show_price_per_sqft && (
-                            <td className="px-4 py-2 text-sm text-gray-900">₹{item.rate_per_sqft.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              <input
+                                type="number"
+                                value={item.rate_per_sqft !== undefined ? item.rate_per_sqft : ''}
+                                onChange={(e) => updateItemPricePerSqft(roomIndex, itemIndex, parseFloat(e.target.value) || 0)}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                min="0"
+                                step="0.01"
+                                title="Edit Price per SQFT"
+                              />
+                            </td>
                           )}
                           {formData.show_price_per_box && (
-                            <td className="px-4 py-2 text-sm text-gray-900">₹{item.mrp_per_box.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm text-gray-900">₹{item.mrp_per_box !== undefined ? item.mrp_per_box.toFixed(2) : '-'}</td>
                           )}
                           {formData.show_amount && (
-                            <td className="px-4 py-2 text-sm text-gray-900">₹{item.amount.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm text-gray-900">₹{item.amount !== undefined ? item.amount.toFixed(2) : '-'}</td>
                           )}
                           {formData.show_margin && (
                             <td className="px-4 py-2 text-sm text-gray-900">
                               <div className="text-xs">
-                                <div>₹{item.margin_amount.toFixed(2)}</div>
-                                <div className="text-gray-500">({item.margin_percentage.toFixed(1)}%)</div>
+                                <div>₹{item.margin_amount !== undefined ? item.margin_amount.toFixed(2) : '-'}</div>
+                                <div className="text-gray-500">({item.margin_percentage !== undefined ? item.margin_percentage.toFixed(1) : '0'}%)</div>
                               </div>
                             </td>
                           )}
@@ -1144,6 +1369,46 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
         </div>
       </div>
 
+      {/* Local Freight and Unloading Inputs */}
+      <div className="my-8">
+        <div className="bg-white rounded-xl shadow p-6 flex flex-col sm:flex-row gap-6 items-center border border-gray-200 max-w-xl mx-auto">
+          <div className="flex-1 flex items-center gap-3">
+            <div className="bg-blue-100 text-blue-600 rounded-full p-2 flex items-center justify-center">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-sm font-semibold text-gray-700 mb-1">Local Freight</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.local_freight}
+                onChange={e => setFormData(prev => ({ ...prev, local_freight: parseFloat(e.target.value) || 0 }))}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition text-base bg-gray-50 w-36 shadow-sm"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <div className="flex-1 flex items-center gap-3">
+            <div className="bg-green-100 text-green-600 rounded-full p-2 flex items-center justify-center">
+              <Download className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-sm font-semibold text-gray-700 mb-1">Unloading</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.unloading}
+                onChange={e => setFormData(prev => ({ ...prev, unloading: parseFloat(e.target.value) || 0 }))}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition text-base bg-gray-50 w-36 shadow-sm"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Enhanced Summary */}
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
         <h4 className="font-medium text-blue-800 mb-6 flex items-center space-x-2">
@@ -1184,7 +1449,7 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
           
           <div className="text-center">
             <div className="bg-white rounded-lg p-4 border border-blue-200">
-              <DollarSign className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+              <IndianRupee className="w-8 h-8 text-orange-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-orange-800">
                 ₹{totals.total_amount.toFixed(2)}
               </div>
@@ -1231,11 +1496,11 @@ const QuotationStep1: React.FC<QuotationStep1Props> = ({ quotation, onNext, onCa
               <div className="space-y-1 text-blue-700">
                 <div className="flex justify-between">
                   <span>Company Discount:</span>
-                  <span>{settings.companyDiscount}%</span>
+                  <span>Size-specific (see Freight Editor)</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Freight per SQFT:</span>
-                  <span>₹{settings.freightPerSqft}</span>
+                  <span>Size-specific (see Freight Editor)</span>
                 </div>
                 <div className="flex justify-between">
                   <span>SQFT Type:</span>

@@ -18,6 +18,41 @@ const QuotationList: React.FC = () => {
   const [viewMode, setViewMode] = useState<'edit' | 'view'>('edit');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [quotationToDelete, setQuotationToDelete] = useState<Quotation | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Listen for keyboard shortcut events and handle /quotations/new route
+  useEffect(() => {
+    const handleOpenQuotationWizard = () => {
+      handleCreate();
+    };
+
+    const handleProductSaved = () => {
+      // Refresh quotations to show updated product data
+      loadQuotations();
+    };
+
+    const handleCustomerSaved = () => {
+      // Refresh quotations to show updated customer data
+      loadQuotations();
+    };
+
+    // Check if we should open the wizard (for /quotations/new route)
+    const pathname = window.location.pathname;
+    if (pathname === '/quotations/new') {
+      handleCreate();
+    }
+
+    window.addEventListener('openQuotationWizard', handleOpenQuotationWizard);
+    window.addEventListener('productSaved', handleProductSaved);
+    window.addEventListener('customerSaved', handleCustomerSaved);
+    
+    return () => {
+      window.removeEventListener('openQuotationWizard', handleOpenQuotationWizard);
+      window.removeEventListener('productSaved', handleProductSaved);
+      window.removeEventListener('customerSaved', handleCustomerSaved);
+    };
+  }, []);
 
   useEffect(() => {
     loadQuotations();
@@ -76,7 +111,7 @@ const QuotationList: React.FC = () => {
 
       setQuotations(transformedQuotations);
     } catch (error) {
-      console.error('Error loading quotations:', error);
+      // console.error('Error loading quotations:', error);
     } finally {
       setLoading(false);
     }
@@ -88,6 +123,19 @@ const QuotationList: React.FC = () => {
     const matchesStatus = !statusFilter || quotation.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Get paginated quotations
+  const paginatedQuotations = filteredQuotations.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const totalPages = Math.ceil(filteredQuotations.length / itemsPerPage);
+
+  // Reset to page 1 when items per page changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -109,9 +157,7 @@ const QuotationList: React.FC = () => {
   };
 
   const handleSave = (quotation: Quotation) => {
-    setEditingQuotation(quotation);
-    setViewMode('view');
-    setShowWizard(true);
+    navigate(`/quotations/${quotation.quotation_number.replace(/^#/, '')}/step3`);
   };
 
   const handleCancel = () => {
@@ -134,6 +180,17 @@ const QuotationList: React.FC = () => {
       pdf_template: quotation.pdf_template,
       link_template: quotation.link_template,
       is_area_wise: quotation.is_area_wise,
+      // Copy all global settings and column visibility fields
+      sqft_in_box_type: quotation.sqft_in_box_type,
+      show_sqft_in_box: quotation.show_sqft_in_box,
+      show_sqft_needed: quotation.show_sqft_needed,
+      show_box_needed: quotation.show_box_needed,
+      show_price_per_sqft: quotation.show_price_per_sqft,
+      show_price_per_box: quotation.show_price_per_box,
+      show_amount: quotation.show_amount,
+      show_margin: quotation.show_margin,
+      local_freight: quotation.local_freight,
+      unloading: quotation.unloading,
       rooms: quotation.rooms.map(room => ({
         ...room,
         id: '',
@@ -146,6 +203,16 @@ const QuotationList: React.FC = () => {
           room_id: '',
           created_at: undefined,
           updated_at: undefined,
+          // Reset all calculated/user-editable fields
+          amount: 0,
+          margin_amount: 0,
+          margin_percentage: 0,
+          box_needed: 0,
+          sqft_needed: 0,
+          quantity_boxes: 1, // Default to 1 for new duplicate
+          discount_percentage: item.discount_percentage ?? 0,
+          rate_per_sqft: item.rate_per_sqft ?? 0,
+          mrp_per_box: item.mrp_per_box ?? 0,
         }))
       })),
       created_at: undefined,
@@ -154,7 +221,6 @@ const QuotationList: React.FC = () => {
       total_margin_amount: undefined,
       total_margin_percentage: undefined,
     };
-
     setEditingQuotation(duplicatedQuotation as Quotation);
     setViewMode('edit');
     setShowWizard(true);
@@ -221,6 +287,20 @@ const QuotationList: React.FC = () => {
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
+
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">Show:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value={10}>10</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-sm text-gray-600">items</span>
+          </div>
         </div>
       </div>
 
@@ -239,7 +319,7 @@ const QuotationList: React.FC = () => {
           <>
             {/* Mobile Cards View */}
             <div className="lg:hidden">
-              {filteredQuotations.map((quotation) => (
+              {paginatedQuotations.map((quotation) => (
                 <div
                   key={quotation.id}
                   className="border-b border-gray-200 p-4 hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
@@ -299,7 +379,7 @@ const QuotationList: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredQuotations.map((quotation) => (
+                  {paginatedQuotations.map((quotation) => (
                     <tr
                       key={quotation.id}
                       className="hover:bg-blue-50 transition-colors duration-150 cursor-pointer"
@@ -347,6 +427,128 @@ const QuotationList: React.FC = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                      <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredQuotations.length)}</span>{' '}
+                      of <span className="font-medium">{filteredQuotations.length}</span> results
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                      <button
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      {(() => {
+                        const pages = [];
+                        const pageWindow = 2; // Show 2 pages before/after current
+                        let start = Math.max(2, currentPage - pageWindow);
+                        let end = Math.min(totalPages - 1, currentPage + pageWindow);
+                        if (currentPage <= 3) {
+                          start = 2;
+                          end = Math.min(5, totalPages - 1);
+                        }
+                        if (currentPage >= totalPages - 2) {
+                          start = Math.max(2, totalPages - 4);
+                          end = totalPages - 1;
+                        }
+                        // Always show first page
+                        pages.push(
+                          <button
+                            key={1}
+                            onClick={() => setCurrentPage(1)}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              currentPage === 1
+                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            }`}
+                          >
+                            1
+                          </button>
+                        );
+                        // Ellipsis if needed
+                        if (start > 2) {
+                          pages.push(
+                            <span key="start-ellipsis" className="px-2">...</span>
+                          );
+                        }
+                        // Page window
+                        for (let page = start; page <= end; page++) {
+                          pages.push(
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                currentPage === page
+                                  ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                  : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        }
+                        // Ellipsis if needed
+                        if (end < totalPages - 1) {
+                          pages.push(
+                            <span key="end-ellipsis" className="px-2">...</span>
+                          );
+                        }
+                        // Always show last page
+                        if (totalPages > 1) {
+                          pages.push(
+                            <button
+                              key={totalPages}
+                              onClick={() => setCurrentPage(totalPages)}
+                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                currentPage === totalPages
+                                  ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                  : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              }`}
+                            >
+                              {totalPages}
+                            </button>
+                          );
+                        }
+                        return pages;
+                      })()}
+                      <button
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

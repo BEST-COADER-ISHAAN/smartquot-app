@@ -1,303 +1,322 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Quotation } from '../../../types';
+import { formatSizeForDisplay } from '../../../lib/sizeUtils';
+import { getCompanyDetailsFromQuotationAsync } from '../../../lib/companyUtils';
+import { usePreferredSizeUnit } from '../../../hooks/usePreferredSizeUnit';
 
 interface PdfDetailedTemplateProps {
   quotation: Quotation;
+  companyProfile: any;
+  formattedSizeMap?: Record<string, string>;
+  preferredSizeUnit?: string;
 }
 
-const PdfDetailedTemplate: React.FC<PdfDetailedTemplateProps> = ({ quotation }) => {
-  // Fetch company profile from localStorage
-  const companyProfile = {
-    companyName: typeof window !== 'undefined' ? localStorage.getItem('company_name') || 'Your Company Name' : 'Your Company Name',
-    companyAddress: typeof window !== 'undefined' ? localStorage.getItem('company_address') || 'Your Company Address' : 'Your Company Address',
-    companyPhone: typeof window !== 'undefined' ? localStorage.getItem('company_phone') || '+91-0000000000' : '+91-0000000000',
-    companyEmail: typeof window !== 'undefined' ? localStorage.getItem('company_email') || 'info@yourcompany.com' : 'info@yourcompany.com',
-    gstNo: typeof window !== 'undefined' ? localStorage.getItem('gst_no') || '' : '',
-  };
+const PdfDetailedTemplate: React.FC<PdfDetailedTemplateProps> = ({ quotation, companyProfile, formattedSizeMap = {}, preferredSizeUnit = 'mm' }) => {
+  if (!companyProfile) return <div className="p-8 text-center text-red-600">No company profile found. Please update your profile settings.</div>;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 2
-    }).format(amount);
-  };
+  // Get column visibility settings
+  const showSqftInBox = quotation.show_sqft_in_box !== false;
+  const showSqftNeeded = quotation.show_sqft_needed !== false;
+  const showBoxNeeded = quotation.show_box_needed !== false;
+  const showPricePerSqft = quotation.show_price_per_sqft !== false;
+  const showPricePerBox = quotation.show_price_per_box !== false;
+  const showAmount = quotation.show_amount !== false;
+  const showMargin = quotation.show_margin !== false;
 
+  // Calculate totals
+  const totalAmount = quotation.total_amount || 0;
+  const roundOff = Math.round(totalAmount) - totalAmount;
+  const finalAmount = Math.round(totalAmount);
+
+  // Ensure we have rooms data
+  const rooms = quotation.rooms || [];
+  const hasItems = rooms.some(room => room.items && room.items.length > 0);
+
+  // Format date
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const date = new Date(dateString || Date.now());
+    return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
   };
 
-  const calculateRoundOff = (amount: number) => {
-    const rounded = Math.round(amount);
-    return rounded - amount;
-  };
+  // Remove the async size formatting useEffect and useState
+  // const [formattedSizes, setFormattedSizes] = useState<{ [size: string]: string }>({});
+  // useEffect(() => { ... }, [rooms]);
+  // const { preferredSizeUnit } = usePreferredSizeUnit();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6 font-serif" style={{ fontFamily: 'Georgia, Times New Roman, Times, serif' }}>
-      <div className="mx-auto" style={{ width: '95%' }}>
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-900 text-white p-8">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h1 className="text-5xl font-bold tracking-wider mb-5" style={{ letterSpacing: '0.1em' }}>QUOTATION</h1>
-                <div className="w-24 h-1 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full mb-4"></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Company Information */}
-          <div className="p-8 bg-gradient-to-r from-slate-50 to-blue-50 border-b border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                <div className="flex items-center mb-4">
-                  <div className="w-3 h-3 bg-blue-600 rounded-full mr-3"></div>
-                  <h2 className="text-xl font-bold text-slate-800">From: {companyProfile.companyName}</h2>
+    <div className="min-h-screen bg-white p-6" style={{ fontFamily: 'Times New Roman, serif' }}>
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="border-b-4 border-gray-800 pb-6 mb-8">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-5xl font-bold text-gray-800 mb-4">DETAILED QUOTATION</h1>
+              <div className="grid grid-cols-2 gap-8 text-sm">
+                <div>
+                  <p><strong>Quotation Number:</strong> {quotation.quotation_number}</p>
+                  <p><strong>Date Created:</strong> {formatDate(quotation.created_at)}</p>
+                  <p><strong>Status:</strong> {quotation.status || 'Draft'}</p>
                 </div>
-                <div className="space-y-2 text-gray-700">
-                  <p className="font-semibold text-lg">{companyProfile.companyName}</p>
-                  <p>{companyProfile.companyAddress}</p>
-                  {companyProfile.companyPhone && <p className="text-blue-600 font-medium">{companyProfile.companyPhone}</p>}
-                  {companyProfile.companyEmail && <p className="text-blue-600 font-medium">{companyProfile.companyEmail}</p>}
-                  {companyProfile.gstNo && <p className="text-sm text-gray-500 mt-2">GST: {companyProfile.gstNo}</p>}
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                <div className="flex items-center mb-4">
-                  <div className="w-3 h-3 bg-green-600 rounded-full mr-3"></div>
-                  <h2 className="text-xl font-bold text-slate-800">To: Client Information</h2>
-                </div>
-                <div className="space-y-2 text-gray-700">
-                  <p className="font-semibold text-lg">{quotation.customer?.name || 'Client Name'}</p>
-                  {quotation.customer?.site_address && <p>{quotation.customer.site_address}</p>}
-                  {quotation.customer?.phone && <p className="text-green-600 font-medium">{quotation.customer.phone}</p>}
-                  {quotation.customer?.email && <p className="text-green-600 font-medium">{quotation.customer.email}</p>}
-                  {quotation.customer?.gst_number && <p className="text-sm text-gray-500 mt-2">GST: {quotation.customer.gst_number}</p>}
+                <div>
+                  <p><strong>Type:</strong> {quotation.is_area_wise ? 'Area-wise' : 'General'}</p>
+                  <p><strong>Include Images:</strong> {quotation.include_images ? 'Yes' : 'No'}</p>
+                  <p><strong>Export Type:</strong> {quotation.export_type || 'PDF'}</p>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Quotation Details */}
-          <div className="p-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200">
-                <div className="text-sm text-purple-600 font-medium mb-1">Quotation Number</div>
-                <div className="text-xl font-bold text-purple-800">{quotation.quotation_number}</div>
-              </div>
-              <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200">
-                <div className="text-sm text-orange-600 font-medium mb-1">Quotation Date</div>
-                <div className="text-xl font-bold text-orange-800">{formatDate(quotation.created_at)}</div>
-              </div>
-            </div>
-
-            {/* Summary Statistics */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 text-center border border-blue-200">
-                <div className="text-2xl font-bold text-blue-800">{quotation.rooms?.length || 0}</div>
-                <div className="text-sm text-blue-600 font-medium">Total Rooms</div>
-              </div>
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 text-center border border-green-200">
-                <div className="text-2xl font-bold text-green-800">{quotation.rooms?.reduce((sum, room) => sum + room.items.length, 0) || 0}</div>
-                <div className="text-sm text-green-600 font-medium">Total Products</div>
-              </div>
-              <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 text-center border border-purple-200">
-                <div className="text-2xl font-bold text-purple-800">{quotation.rooms?.reduce((sum, room) => sum + room.items.reduce((itemSum, item) => itemSum + (item.quantity_boxes || 0), 0), 0) || 0}</div>
-                <div className="text-sm text-purple-600 font-medium">Total Boxes</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Detailed Products Table */}
-          <div className="p-8">
-            <h3 className="text-2xl font-bold mb-6 text-slate-800 flex items-center">
-              <div className="w-3 h-10 bg-gradient-to-b from-blue-600 to-indigo-700 rounded mr-4"></div>
-              Detailed Product Specifications
-            </h3>
-            
-            {quotation.rooms && quotation.rooms.length > 0 && quotation.rooms.some(room => room.items && room.items.length > 0) ? (
-              <div className="space-y-6">
-                {quotation.rooms.map((room, roomIndex) => (
-                  <div key={roomIndex} className="border-2 border-gray-200 rounded-lg overflow-hidden shadow-lg">
-                    <div className="bg-gradient-to-r from-slate-700 to-slate-800 text-white p-4">
-                      <h4 className="text-xl font-bold flex items-center">
-                        <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
-                        Room {roomIndex + 1}: {room.room_name}
-                      </h4>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
-                            <th className="font-semibold px-4 py-3 text-left">Product Details</th>
-                            <th className="font-semibold px-4 py-3 text-left">Size & Surface</th>
-                            {quotation.show_sqft_in_box && (
-                              <th className="font-semibold px-4 py-3 text-center">SQFT/Box</th>
-                            )}
-                            {quotation.show_sqft_needed && (
-                              <th className="font-semibold px-4 py-3 text-center">SQFT Needed</th>
-                            )}
-                            {quotation.show_box_needed && (
-                              <th className="font-semibold px-4 py-3 text-center">Boxes Needed</th>
-                            )}
-                            <th className="font-semibold px-4 py-3 text-center">Quantity</th>
-                            {quotation.show_price_per_sqft && (
-                              <th className="font-semibold px-4 py-3 text-right">Price/SQFT</th>
-                            )}
-                            {quotation.show_price_per_box && (
-                              <th className="font-semibold px-4 py-3 text-right">Price/Box</th>
-                            )}
-                            {quotation.show_amount && (
-                              <th className="font-semibold px-4 py-3 text-right">Amount</th>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {room.items.map((item, itemIndex) => (
-                            <tr key={itemIndex} className={itemIndex % 2 === 0 ? "bg-white" : "bg-gradient-to-r from-gray-50 to-blue-50"}>
-                              <td className="px-4 py-4 align-top">
-                                <div className="space-y-1">
-                                  <div className="font-bold text-blue-900 text-base">{item.product?.name || 'Unknown Product'}</div>
-                                  {item.product?.collection && (
-                                    <div className="text-sm text-purple-600 font-medium">Collection: {item.product.collection}</div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-4 py-4 align-top">
-                                <div className="space-y-1">
-                                  <div className="text-sm text-gray-700">
-                                    <span className="font-medium">Size:</span> {item.product?.size || '-'}
-                                  </div>
-                                  <div className="text-sm text-gray-700">
-                                    <span className="font-medium">Surface:</span> {item.product?.surface || 'Standard'}
-                                  </div>
-                                </div>
-                              </td>
-                              {quotation.show_sqft_in_box && (
-                                <td className="px-4 py-4 align-top text-center">
-                                  <div className="text-sm font-medium text-green-700">
-                                    {quotation.sqft_in_box_type === 'actual'
-                                      ? item.product?.actual_sqft_per_box.toFixed(2)
-                                      : item.product?.billed_sqft_per_box.toFixed(2)
-                                    }
-                                  </div>
-                                  <div className="text-xs text-gray-500">({quotation.sqft_in_box_type})</div>
-                                </td>
-                              )}
-                              {quotation.show_sqft_needed && (
-                                <td className="px-4 py-4 align-top text-center">
-                                  <div className="text-sm font-medium text-orange-700">{item.sqft_needed?.toFixed(2)}</div>
-                                </td>
-                              )}
-                              {quotation.show_box_needed && (
-                                <td className="px-4 py-4 align-top text-center">
-                                  <div className="text-sm font-medium text-purple-700">{item.box_needed?.toFixed(2)}</div>
-                                </td>
-                              )}
-                              <td className="px-4 py-4 align-top text-center">
-                                <div className="text-lg font-bold text-blue-800">{item.quantity_boxes}</div>
-                                <div className="text-xs text-gray-500">boxes</div>
-                              </td>
-                              {quotation.show_price_per_sqft && (
-                                <td className="px-4 py-4 align-top text-right">
-                                  <div className="text-sm font-medium text-green-700">{formatCurrency(item.rate_per_sqft)}</div>
-                                </td>
-                              )}
-                              {quotation.show_price_per_box && (
-                                <td className="px-4 py-4 align-top text-right">
-                                  <div className="text-sm font-medium text-indigo-700">{formatCurrency(item.mrp_per_box)}</div>
-                                </td>
-                              )}
-                              {quotation.show_amount && (
-                                <td className="px-4 py-4 align-top text-right">
-                                  <div className="text-base font-bold text-blue-900 bg-blue-50 px-2 py-1 rounded">
-                                    {formatCurrency(item.amount || 0)}
-                                  </div>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50 rounded-lg border-2 border-dashed border-gray-300">
-                <div className="text-6xl mb-4">📋</div>
-                <p className="text-xl text-gray-600">No products added to this quotation</p>
+            {companyProfile.logo && (
+              <div className="flex-shrink-0 border-2 border-gray-300 p-4">
+                <img 
+                  src={companyProfile.logo} 
+                  alt="Company Logo" 
+                  className="h-24 w-auto object-contain"
+                />
               </div>
             )}
           </div>
+        </div>
 
-          {/* Spacer to help avoid page break in Financial Summary */}
-          <div style={{ height: '100px' }}></div>
-
-          {/* Financial Summary */}
-          <div className="p-8">
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 border border-green-200 max-w-md ml-auto">
-              <h3 className="text-xl font-bold mb-4 text-green-800 flex items-center">
-                <div className="w-2 h-6 bg-green-600 rounded mr-3"></div>
-                Financial Summary
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between py-2 border-b border-green-200">
-                  <span className="text-gray-700">Subtotal:</span>
-                  <span className="font-semibold text-green-800">{formatCurrency(quotation.total_amount || 0)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-green-200">
-                  <span className="text-gray-700">Round Off:</span>
-                  <span className="font-semibold text-green-800">{formatCurrency(calculateRoundOff(quotation.total_amount || 0))}</span>
-                </div>
-                <div className="flex justify-between py-3 bg-green-100 rounded-lg px-3">
-                  <span className="text-lg font-bold text-green-900">Grand Total:</span>
-                  <span className="text-lg font-bold text-green-900">{formatCurrency(Math.round(quotation.total_amount || 0))}</span>
-                </div>
-              </div>
+        {/* Company and Customer Details */}
+        <div className="grid grid-cols-2 gap-8 mb-8">
+          <div className="border-2 border-gray-400 p-6 bg-gray-50">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">COMPANY DETAILS</h2>
+            <div className="space-y-3 text-gray-700">
+              {companyProfile.companyName && <p className="font-bold text-lg">{companyProfile.companyName}</p>}
+              {companyProfile.companyAddress && <p className="text-gray-600">{companyProfile.companyAddress}</p>}
+              {companyProfile.companyPhone && <p><strong>Phone:</strong> {companyProfile.companyPhone}</p>}
+              {companyProfile.companyEmail && <p><strong>Email:</strong> {companyProfile.companyEmail}</p>}
+              {companyProfile.gstNo && <p><strong>GST Number:</strong> {companyProfile.gstNo}</p>}
             </div>
           </div>
+          <div className="border-2 border-gray-400 p-6 bg-gray-50">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">CUSTOMER DETAILS</h2>
+            <div className="space-y-3 text-gray-700">
+              <p className="font-bold text-lg">{quotation.customer?.name || 'Customer Name'}</p>
+              {quotation.customer?.site_address && (
+                <p><strong>Site Address:</strong> {quotation.customer.site_address}</p>
+              )}
+              {quotation.customer?.phone && <p><strong>Phone:</strong> {quotation.customer.phone}</p>}
+              {quotation.customer?.email && <p><strong>Email:</strong> {quotation.customer.email}</p>}
+              {quotation.customer?.gst_number && <p><strong>GST Number:</strong> {quotation.customer.gst_number}</p>}
+            </div>
+          </div>
+        </div>
 
-          {/* Terms & Conditions */}
-          <div className="p-8">
-            <h3 className="text-xl font-bold mb-4 text-slate-800 flex items-center">
-              <div className="w-2 h-6 bg-orange-600 rounded mr-3"></div>
-              Terms & Conditions
-            </h3>
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-6 rounded-lg border border-orange-200">
-              <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {quotation.terms_conditions ? (
-                  quotation.terms_conditions
-                ) : (
-                  <div className="text-gray-500 italic">
-                    <p>• Prices are valid for 30 days from the quotation date</p>
-                    <p>• Payment terms: 50% advance, balance before delivery</p>
-                    <p>• Delivery timeline: 7-10 business days after confirmation</p>
-                    <p>• Installation charges are not included unless specified</p>
-                    <p>• Warranty: 10 years on manufacturing defects</p>
-                    <p>• Returns accepted within 7 days in original packaging</p>
+        {/* Project Information */}
+        <div className="border-2 border-gray-400 p-6 mb-8 bg-blue-50">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">PROJECT INFORMATION</h2>
+          <div className="grid grid-cols-3 gap-6 text-sm">
+            <div>
+              <p><strong>Quotation Type:</strong> {quotation.is_area_wise ? 'Area-wise Quotation' : 'General Quotation'}</p>
+              <p><strong>Total Rooms:</strong> {rooms.length}</p>
+              <p><strong>Total Items:</strong> {rooms.reduce((total, room) => total + (room.items?.length || 0), 0)}</p>
+            </div>
+            <div>
+              <p><strong>Include Product Images:</strong> {quotation.include_images ? 'Yes' : 'No'}</p>
+              <p><strong>Terms & Conditions:</strong> {quotation.terms_conditions ? 'Included' : 'Not Included'}</p>
+              <p><strong>Internal Notes:</strong> {quotation.notes ? 'Added' : 'None'}</p>
+            </div>
+            <div>
+              <p><strong>Export Format:</strong> {quotation.export_type || 'PDF'}</p>
+              <p><strong>PDF Template:</strong> {quotation.pdf_template || 'Standard'}</p>
+              <p><strong>Link Template:</strong> {quotation.link_template || 'Modern'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Product Tables */}
+        {hasItems ? (
+          <div className="mb-8">
+            {quotation.is_area_wise ? (
+              // Area-wise detailed display
+              rooms.map((room, roomIndex) => (
+                <div key={room.id || roomIndex} className="mb-8 border-2 border-gray-400">
+                  <div className="bg-gray-800 text-white p-4">
+                    <h3 className="text-xl font-bold">ROOM {roomIndex + 1}: {room.room_name || `Room ${roomIndex + 1}`}</h3>
                   </div>
-                )}
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-[14px]">
+                      <thead className="bg-gray-600 text-white">
+                        <tr>
+                          <th className="border border-gray-400 p-0.5 text-left text-[11px]">Item #</th>
+                          <th className="border border-gray-400 p-0.5 text-left text-[11px] w-20">Product Name</th>
+                          <th className="border border-gray-400 p-0.5 text-center text-[13px] w-24">Size</th>
+                          <th className="border border-gray-400 p-0.5 text-center text-[11px]">Surface</th>
+                          <th className="border border-gray-400 p-0.5 text-left text-[11px]">Description</th>
+                          {showSqftInBox && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Sq.Ft in Box</th>}
+                          {showSqftNeeded && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Sq.Ft Needed</th>}
+                          {showBoxNeeded && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Quantity</th>}
+                          {showPricePerSqft && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Price/Sq.Ft</th>}
+                          {showPricePerBox && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Price/Box</th>}
+                          {showAmount && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Amount</th>}
+                          {showMargin && <th className="border border-gray-400 p-0.5 text-center text-[11px]">Margin</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {room.items?.map((item, index) => (
+                          <tr key={item.id || index} className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                            <td className="border border-gray-400 p-0.5 font-bold text-center text-[15px]">{index + 1}</td>
+                            <td className="border border-gray-400 p-0.5 font-semibold text-[15px]">{item.product?.name || item.name || 'Product Name'}</td>
+                            <td className="border border-gray-400 p-0.5 text-center text-[15px]">{item.product?.size ? formattedSizeMap[item.product.size] || item.product.size : ''}</td>
+                            <td className="border border-gray-400 p-0.5 text-center text-[15px]">{item.product?.surface || ''}</td>
+                            <td className="border border-gray-400 p-0.5 text-[15px]">{item.product_description || ''}</td>
+                            {showSqftInBox && <td className="border border-gray-400 p-0.5 text-center text-[15px]">{item.product?.[quotation.sqft_in_box_type === 'actual' ? 'actual_sqft_per_box' : 'billed_sqft_per_box'] || ''}</td>}
+                            {showSqftNeeded && <td className="border border-gray-400 p-0.5 text-center text-[15px]">{item.sqft_needed || 0}</td>}
+                            {showBoxNeeded && <td className="border border-gray-400 p-0.5 text-center text-[15px]">{item.quantity || 0}</td>}
+                            {showPricePerSqft && <td className="border border-gray-400 p-0.5 text-center font-medium text-[15px]">₹{item.price_per_sqft || 0}</td>}
+                            {showPricePerBox && <td className="border border-gray-400 p-0.5 text-center font-medium text-[15px]">₹{item.price_per_box || 0}</td>}
+                            {showAmount && <td className="border border-gray-400 p-0.5 text-center font-bold text-[15px]">₹{item.total_price || 0}</td>}
+                            {showMargin && <td className="border border-gray-400 p-0.5 text-center text-[15px]">₹{item.margin_amount || 0}</td>}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Room Summary */}
+                  <div className="bg-gray-100 p-4 border-t-2 border-gray-400">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-lg">Room Summary:</p>
+                        <p className="text-sm text-gray-600">Total Items: {room.items?.length || 0}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-[10px]">Room Total: ₹{room.room_total?.toLocaleString() || 0}</p>
+                        {room.room_margin_amount && (
+                          <p className="text-sm text-gray-600">Margin: ₹{room.room_margin_amount}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              // General detailed display
+              <div className="border-2 border-gray-400">
+                <div className="bg-gray-800 text-white p-4">
+                  <h3 className="text-xl font-bold">PRODUCT DETAILS</h3>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-gray-600 text-white">
+                      <tr>
+                        <th className="border border-gray-400 p-3 text-left">Item #</th>
+                        <th className="border border-gray-400 p-3 text-left">Product Name</th>
+                        <th className="border border-gray-400 p-3 text-left">Size</th>
+                        <th className="border border-gray-400 p-3 text-left">Surface</th>
+                        <th className="border border-gray-400 p-3 text-left">Description</th>
+                        {showSqftInBox && <th className="border border-gray-400 p-3 text-center">Sq.Ft in Box</th>}
+                        {showSqftNeeded && <th className="border border-gray-400 p-3 text-center">Sq.Ft Needed</th>}
+                        {showBoxNeeded && <th className="border border-gray-400 p-3 text-center">Quantity</th>}
+                        {showPricePerSqft && <th className="border border-gray-400 p-3 text-center">Price/Sq.Ft</th>}
+                        {showPricePerBox && <th className="border border-gray-400 p-3 text-center">Price/Box</th>}
+                        {showAmount && <th className="border border-gray-400 p-3 text-center">Amount</th>}
+                        {showMargin && <th className="border border-gray-400 p-3 text-center">Margin</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rooms.flatMap((room, roomIndex) => 
+                        room.items?.map((item, index) => (
+                          <tr key={item.id || `${roomIndex}-${index}`} className={`${(roomIndex * (room.items?.length || 0) + index) % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                            <td className="border border-gray-400 p-3 font-bold">{(roomIndex * (room.items?.length || 0) + index + 1)}</td>
+                            <td className="border border-gray-400 p-3 font-semibold">{item.product?.name || item.name || 'Product Name'}</td>
+                            <td className="border border-gray-400 p-3">{item.product?.size ? formattedSizeMap[item.product.size] || item.product.size : ''}</td>
+                            <td className="border border-gray-400 p-3">{item.product?.surface || ''}</td>
+                            <td className="border border-gray-400 p-3 text-sm">{item.product_description || ''}</td>
+                            {showSqftInBox && <td className="border border-gray-400 p-3 text-center">{item.product?.[quotation.sqft_in_box_type === 'actual' ? 'actual_sqft_per_box' : 'billed_sqft_per_box'] || ''}</td>}
+                            {showSqftNeeded && <td className="border border-gray-400 p-3 text-center">{item.sqft_needed || 0}</td>}
+                            {showBoxNeeded && <td className="border border-gray-400 p-3 text-center">{item.quantity || 0}</td>}
+                            {showPricePerSqft && <td className="border border-gray-400 p-3 text-center font-medium">₹{item.price_per_sqft || 0}</td>}
+                            {showPricePerBox && <td className="border border-gray-400 p-3 text-center font-medium">₹{item.price_per_box || 0}</td>}
+                            {showAmount && <td className="border border-gray-400 p-3 text-center font-bold">₹{item.total_price || 0}</td>}
+                            {showMargin && <td className="border border-gray-400 p-3 text-center">₹{item.margin_amount || 0}</td>}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+        ) : (
+          <div className="border-2 border-gray-400 p-8 text-center bg-gray-50">
+            <p className="text-gray-600 text-lg">No items found in this quotation.</p>
+          </div>
+        )}
 
-            {/* Footer */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-6 rounded-lg text-center mt-8">
-              <p className="text-xl font-bold mb-2">Thank you for choosing our services!</p>
-              <p className="text-slate-300 mb-4">We look forward to working with you on this project.</p>
-              <div className="w-20 h-1 bg-gradient-to-r from-blue-400 to-cyan-400 mx-auto rounded-full"></div>
+        {/* Detailed Summary */}
+        <div className="grid grid-cols-2 gap-8 mb-8">
+          <div className="border-2 border-gray-400 p-6 bg-gray-50">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">QUOTATION SUMMARY</h3>
+            <div className="space-y-3 text-sm">
+              <p><strong>Total Rooms:</strong> {rooms.length}</p>
+              <p><strong>Total Items:</strong> {rooms.reduce((total, room) => total + (room.items?.length || 0), 0)}</p>
+              <p><strong>Subtotal:</strong> ₹{totalAmount.toFixed(2)}</p>
+              {Number(quotation.local_freight || 0) > 0 && (
+                <p><strong>Local Freight:</strong> ₹{Number(quotation.local_freight || 0).toFixed(2)}</p>
+              )}
+              {Number(quotation.unloading || 0) > 0 && (
+                <p><strong>Unloading:</strong> ₹{Number(quotation.unloading || 0).toFixed(2)}</p>
+              )}
+              <p><strong>Round Off:</strong> ₹{roundOff.toFixed(2)}</p>
+              <p className="font-bold text-xl"><strong>Final Total:</strong> ₹{finalAmount.toLocaleString()}</p>
             </div>
           </div>
+          
+          <div className="border-2 border-gray-400 p-6 bg-gray-50">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">EXPORT SETTINGS</h3>
+            <div className="space-y-3 text-sm">
+              <p><strong>Export Type:</strong> {quotation.export_type || 'PDF'}</p>
+              <p><strong>PDF Template:</strong> {quotation.pdf_template || 'Standard'}</p>
+              <p><strong>Include Images:</strong> {quotation.include_images ? 'Yes' : 'No'}</p>
+              <p><strong>Terms & Conditions:</strong> {quotation.terms_conditions ? 'Included' : 'Not Included'}</p>
+              <p><strong>Internal Notes:</strong> {quotation.notes ? 'Added' : 'None'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Terms and Conditions */}
+        {quotation.terms_conditions && (
+          <div className="border-2 border-gray-400 p-6 mb-8 bg-yellow-50">
+            <h3 className="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">TERMS & CONDITIONS</h3>
+            <div className="text-gray-700 leading-relaxed">
+              {quotation.terms_conditions.split('\n').map((line, index) => {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                  return (
+                    <p key={index} className="mb-3">
+                      <span className="font-bold">{trimmedLine.match(/^(\d+)\./)?.[1] || ''}.</span> {trimmedLine.replace(/^\d+\.\s*/, '')}
+                    </p>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Internal Notes */}
+        {quotation.notes && (
+          <div className="border-2 border-gray-400 p-6 mb-8 bg-blue-50">
+            <h3 className="text-2xl font-bold text-gray-800 mb-4 border-b-2 border-gray-400 pb-2">INTERNAL NOTES</h3>
+            <div className="text-gray-700 leading-relaxed">
+              {quotation.notes}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="border-t-4 border-gray-800 pt-6 text-center">
+          <p className="text-lg font-bold text-gray-800 mb-2">Thank you for your business!</p>
+          <p className="text-gray-600">For any queries, please contact us at {companyProfile.companyEmail}</p>
+          <p className="text-gray-600 mt-2">Phone: {companyProfile.companyPhone}</p>
         </div>
       </div>
     </div>
   );
 };
 
-export default PdfDetailedTemplate;
+export default PdfDetailedTemplate; 

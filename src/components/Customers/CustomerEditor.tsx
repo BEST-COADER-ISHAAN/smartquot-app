@@ -31,17 +31,14 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
 
   const handleSave = async () => {
     if (!isFormValid) {
-      console.log('Form validation failed');
       return;
     }
 
     if (!user) {
-      console.error('No user found - cannot save customer');
       alert('You must be logged in to save a customer.');
       return;
     }
     if (!session?.access_token) {
-      console.error('No access token found - cannot save customer');
       alert('No access token found. Please log in again.');
       return;
     }
@@ -59,18 +56,14 @@ const CustomerEditor: React.FC<CustomerEditorProps> = ({ customer, onSave, onCan
         created_by: user.id,
       };
 
-      console.log('Saving customer with data:', customerData);
-
       const response = await api.saveCustomer(customerData, customer?.id, session.access_token);
         
       if (!response.success) {
         throw new Error(response.error || 'Failed to save customer');
       }
 
-      console.log('Customer saved successfully:', response.data);
       onSave(response.data);
     } catch (error) {
-      console.error('Error saving customer:', error);
       setError(error instanceof Error ? error.message : 'Failed to save customer. Please try again.');
     } finally {
       setLoading(false);

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing Type Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .result { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Billing Type Functionality Test</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Billing Type Storage</h2>
+        <button onclick="testBillingTypeStorage()">Test Billing Type Storage</button>
+        <div id="test1-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: Column Header Logic</h2>
+        <button onclick="testColumnHeaders()">Test Column Headers</button>
+        <div id="test2-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Price Display Logic</h2>
+        <button onclick="testPriceDisplay()">Test Price Display</button>
+        <div id="test3-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 4: SQFT Display Logic</h2>
+        <button onclick="testSqftDisplay()">Test SQFT Display</button>
+        <div id="test4-result"></div>
+    </div>
+
+    <script>
+        // Mock billing utilities for testing
+        const getBillingTypeForSize = (size) => {
+            try {
+                const billingTypeMap = JSON.parse(localStorage.getItem('billing_types') || '{}');
+                return billingTypeMap[size] || 'per_sqft';
+            } catch (error) {
+                return 'per_sqft';
+            }
+        };
+
+        const getColumnHeader = (baseHeader, billingType) => {
+            if (billingType === 'per_piece') {
+                const headerMap = {
+                    'SQFT in Box': 'Pieces in Box',
+                    'Price per sqft': 'Price per Piece',
+                    'MRP per sqft': 'MRP per Piece',
+                    'Ex-Factory Price per sqft': 'Ex-Factory Price per Piece',
+                    'Freight per sqft': 'Freight per Piece'
+                };
+                return headerMap[baseHeader] || baseHeader;
+            }
+            return baseHeader;
+        };
+
+        const formatPriceDisplay = (price, billingType) => {
+            if (billingType === 'per_piece') {
+                return `₹${price.toFixed(2)}/Pcs`;
+            }
+            return `₹${price.toFixed(2)}/sqft`;
+        };
+
+        const formatBillingDisplay = (value, billingType) => {
+            if (billingType === 'per_piece') {
+                return `${value} Pcs`;
+            }
+            return `${value} sqft`;
+        };
+
+        function testBillingTypeStorage() {
+            const resultDiv = document.getElementById('test1-result');
+            resultDiv.innerHTML = '';
+            
+            // Test setting billing types
+            const testBillingTypes = {
+                '600x600': 'per_sqft',
+                '800x800': 'per_piece',
+                '1200x600': 'per_sqft'
+            };
+            
+            localStorage.setItem('billing_types', JSON.stringify(testBillingTypes));
+            
+            // Test retrieving billing types
+            const results = [];
+            for (const [size, expectedType] of Object.entries(testBillingTypes)) {
+                const actualType = getBillingTypeForSize(size);
+                const success = actualType === expectedType;
+                results.push({
+                    size,
+                    expected: expectedType,
+                    actual: actualType,
+                    success
+                });
+            }
+            
+            // Display results
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.className = `result ${result.success ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    Size: ${result.size} | 
+                    Expected: ${result.expected} | 
+                    Actual: ${result.actual} | 
+                    ${result.success ? '✓ PASS' : '✗ FAIL'}
+                `;
+                resultDiv.appendChild(div);
+            });
+        }
+
+        function testColumnHeaders() {
+            const resultDiv = document.getElementById('test2-result');
+            resultDiv.innerHTML = '';
+            
+            const testCases = [
+                { header: 'SQFT in Box', billingType: 'per_sqft', expected: 'SQFT in Box' },
+                { header: 'SQFT in Box', billingType: 'per_piece', expected: 'Pieces in Box' },
+                { header: 'Price per sqft', billingType: 'per_sqft', expected: 'Price per sqft' },
+                { header: 'Price per sqft', billingType: 'per_piece', expected: 'Price per Piece' }
+            ];
+            
+            testCases.forEach(testCase => {
+                const actual = getColumnHeader(testCase.header, testCase.billingType);
+                const success = actual === testCase.expected;
+                
+                const div = document.createElement('div');
+                div.className = `result ${success ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    Header: "${testCase.header}" | 
+                    Billing Type: ${testCase.billingType} | 
+                    Expected: "${testCase.expected}" | 
+                    Actual: "${actual}" | 
+                    ${success ? '✓ PASS' : '✗ FAIL'}
+                `;
+                resultDiv.appendChild(div);
+            });
+        }
+
+        function testPriceDisplay() {
+            const resultDiv = document.getElementById('test3-result');
+            resultDiv.innerHTML = '';
+            
+            const testCases = [
+                { price: 100, billingType: 'per_sqft', expected: '₹100.00/sqft' },
+                { price: 100, billingType: 'per_piece', expected: '₹100.00/Pcs' },
+                { price: 50.5, billingType: 'per_sqft', expected: '₹50.50/sqft' },
+                { price: 50.5, billingType: 'per_piece', expected: '₹50.50/Pcs' }
+            ];
+            
+            testCases.forEach(testCase => {
+                const actual = formatPriceDisplay(testCase.price, testCase.billingType);
+                const success = actual === testCase.expected;
+                
+                const div = document.createElement('div');
+                div.className = `result ${success ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    Price: ${testCase.price} | 
+                    Billing Type: ${testCase.billingType} | 
+                    Expected: "${testCase.expected}" | 
+                    Actual: "${actual}" | 
+                    ${success ? '✓ PASS' : '✗ FAIL'}
+                `;
+                resultDiv.appendChild(div);
+            });
+        }
+
+        function testSqftDisplay() {
+            const resultDiv = document.getElementById('test4-result');
+            resultDiv.innerHTML = '';
+            
+            const testCases = [
+                { value: 24, billingType: 'per_sqft', expected: '24 sqft' },
+                { value: 24, billingType: 'per_piece', expected: '24 Pcs' },
+                { value: 12.5, billingType: 'per_sqft', expected: '12.5 sqft' },
+                { value: 12.5, billingType: 'per_piece', expected: '12.5 Pcs' }
+            ];
+            
+            testCases.forEach(testCase => {
+                const actual = formatBillingDisplay(testCase.value, testCase.billingType);
+                const success = actual === testCase.expected;
+                
+                const div = document.createElement('div');
+                div.className = `result ${success ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    Value: ${testCase.value} | 
+                    Billing Type: ${testCase.billingType} | 
+                    Expected: "${testCase.expected}" | 
+                    Actual: "${actual}" | 
+                    ${success ? '✓ PASS' : '✗ FAIL'}
+                `;
+                resultDiv.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html> 

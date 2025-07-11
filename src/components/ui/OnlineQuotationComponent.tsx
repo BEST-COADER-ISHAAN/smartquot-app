@@ -18,7 +18,18 @@ import {
   ChevronRight,
   Search,
   Filter,
-  MoreHorizontal
+  MoreHorizontal,
+  IndianRupee,
+  Share2,
+  Printer,
+  Eye,
+  EyeOff,
+  Edit,
+  ChevronDown,
+  ChevronUp,
+  Phone,
+  Mail,
+  MapPin
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -365,10 +376,10 @@ ${quotationData.clientAddress}
 
 ITEMS:
 ${quotationData.items.map(item => 
-  `${item.description} - Qty: ${item.quantity} - Price: $${item.unitPrice} - Total: $${item.total}`
+          `${item.description} - Qty: ${item.quantity} - Price: ₹${item.unitPrice} - Total: ₹${item.total}`
 ).join('\n')}
 
-TOTAL: $${quotationData.totalAmount.toFixed(2)}
+TOTAL: ₹${quotationData.totalAmount.toFixed(2)}
     `
     
     const blob = new Blob([exportData], { type: 'text/plain' })
@@ -1304,19 +1315,19 @@ TOTAL: $${quotationData.totalAmount.toFixed(2)}
                   <CardContent className="space-y-4">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
-                      <span>${quotationData.subtotal.toFixed(2)}</span>
+                      <span>₹{quotationData.subtotal.toFixed(2)}</span>
                     </div>
                     
                     <div className="flex justify-between">
                       <span>Tax Amount:</span>
-                      <span>${quotationData.taxAmount.toFixed(2)}</span>
+                      <span>₹{quotationData.taxAmount.toFixed(2)}</span>
                     </div>
                     
                     <Separator />
                     
                     <div className="flex justify-between text-lg font-semibold">
                       <span>Total Amount:</span>
-                      <span>${quotationData.totalAmount.toFixed(2)}</span>
+                      <span>₹{quotationData.totalAmount.toFixed(2)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -1529,7 +1540,7 @@ TOTAL: $${quotationData.totalAmount.toFixed(2)}
                   <div className="p-3 bg-muted rounded">
                     <div className="flex justify-between text-sm">
                       <span>Total:</span>
-                      <span className="font-semibold">${editingItem.total.toFixed(2)}</span>
+                      <span className="font-semibold">₹{editingItem.total.toFixed(2)}</span>
                     </div>
                   </div>
                   

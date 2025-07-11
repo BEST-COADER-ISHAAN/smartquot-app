@@ -5,51 +5,54 @@ import { Quotation } from '../types';
 import LinkModernTemplate from '../components/Quotations/templates/LinkModernTemplate';
 import LinkMobileTemplate from '../components/Quotations/templates/LinkMobileTemplate';
 import LinkPrintTemplate from '../components/Quotations/templates/LinkPrintTemplate';
+import { supabase } from '../lib/supabase';
 
 const QuotationSharedView: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { company_slug, quotation_number } = useParams<{ company_slug: string; quotation_number: string }>();
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) {
-      loadQuotation(id);
+    if (company_slug && quotation_number) {
+      loadQuotation(company_slug, quotation_number);
     }
-  }, [id]);
+  }, [company_slug, quotation_number]);
 
-  const loadQuotation = async (quotationNumber: string) => {
+  const loadQuotation = async (companySlug: string, quotationNumber: string) => {
     setLoading(true);
     setError(null);
-    
     try {
-      const { data: quotationData, error: quotationError } = await supabase
-        .from('quotations')
-        .select(`
-          *,
-          quotation_rooms(
-            *,
-            quotation_room_items(
-              *,
-              product:products(*)
-            )
-          )
-        `)
-        .eq('quotation_number', quotationNumber)
-        .limit(1);
-
-      if (quotationError) {
-        throw quotationError;
-      }
-
-      // Check if no quotation was found
-      if (!quotationData || quotationData.length === 0) {
-        setError('Quotation not found');
+      // Find the user_id for the given company_slug
+      const { data: userSettings, error: userError } = await supabase
+        .from('user_settings')
+        .select('user_id')
+        .eq('company_slug', companySlug)
+        .maybeSingle();
+      if (userError || !userSettings) {
+        setError('Company not found');
+        setLoading(false);
         return;
       }
-
+      const userId = userSettings.user_id;
+      // Find the quotation for this user and quotation_number
+      const { data: quotationData, error: quotationError } = await supabase
+        .from('quotations')
+        .select(`*, quotation_rooms(*, quotation_room_items(*, product:products(*)))`)
+        .eq('user_id', userId)
+        .eq('quotation_number', quotationNumber)
+        .limit(1);
+      if (quotationError) {
+        setError('Failed to load quotation');
+        setLoading(false);
+        return;
+      }
+      if (!quotationData || quotationData.length === 0) {
+        setError('Quotation not found');
+        setLoading(false);
+        return;
+      }
       const quotationRecord = quotationData[0];
-
       // Get customer data if customer_id exists
       let customerData = null;
       if (quotationRecord.customer_id) {
@@ -58,15 +61,10 @@ const QuotationSharedView: React.FC = () => {
           .select('*')
           .eq('id', quotationRecord.customer_id)
           .single();
-
-        if (customerError) {
-          console.error('Error loading customer:', customerError);
-        } else {
+        if (!customerError) {
           customerData = customer;
         }
       }
-
-      // Transform the data to match our types
       const transformedQuotation: Quotation = {
         ...quotationRecord,
         customer: customerData,
@@ -75,10 +73,8 @@ const QuotationSharedView: React.FC = () => {
           items: room.quotation_room_items
         }))
       };
-
       setQuotation(transformedQuotation);
     } catch (error) {
-      console.error('Error loading quotation:', error);
       setError('Failed to load quotation');
     } finally {
       setLoading(false);
@@ -125,7 +121,7 @@ const QuotationSharedView: React.FC = () => {
           </p>
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-yellow-800 text-sm">
-              <strong>Looking for quotation:</strong> {id}
+              <strong>Looking for quotation:</strong> {quotation_number}
             </p>
             <p className="text-yellow-800 text-sm mt-2">
               If you believe this is an error, please contact the person who shared this link with you.
