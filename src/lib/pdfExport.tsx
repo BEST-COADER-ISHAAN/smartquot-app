@@ -307,7 +307,10 @@ export async function generatePDFBlob(quotation: Quotation): Promise<Blob> {
 </html>`;
 
     // Call the PDF generation API
-    const apiUrl = '/.netlify/functions/generate-pdf'; // Always use Netlify function endpoint
+    let apiUrl = '/.netlify/functions/generate-pdf';
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      apiUrl = '/api/generate-pdf';
+    }
 
     const response = await fetch(apiUrl, {
       method: 'POST',
